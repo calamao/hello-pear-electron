@@ -8,6 +8,9 @@ Renderer (sandboxed) ↔ `window.bridge` (Electron IPC) ↔ main (broker only) �
 FramedStream pipe ↔ Bare worker (`hello-pear-worker`: swarm + corestore + updater).
 The code is small — read it for the wiring; below are only the non-obvious facts.
 
+- The renderer is a React + TypeScript app in `renderer/src/`, styled with
+  styled-components. Vite serves it with React Fast Refresh in development and
+  builds static files into `renderer-dist/` for packaged runs.
 - The paparam parse at the top of `electron/main.js` throws on **any** unknown flag
   or positional → packaged app crashes at startup. This also makes Win/Linux deep
   links unreachable (a URL in argv kills the process before the single-instance

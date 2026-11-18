@@ -84,6 +84,10 @@ Start app in development mode:
 npm start
 ```
 
+The renderer is built with React, TypeScript, and styled-components. `npm start`
+starts the Vite dev server and Electron together; React Fast Refresh updates the
+renderer during development. Renderer source lives in `renderer/src/`.
+
 When running locally, updates are turned off to avoid the built application being swapped from local development when there is an update.
 
 To enable updates for testing update flow in local development use
@@ -451,7 +455,21 @@ Start app in development mode.
 npm start
 ```
 
-Uses: `electron-forge start -- --no-updates`
+Runs `scripts/dev.js`, which starts Vite and then Electron Forge with updates
+disabled by default. Extra app flags are forwarded, for example
+`npm start -- --updates`.
+
+---
+
+### `npm run build:renderer` <a name="script-build-renderer"></a>
+
+Type-check and build the renderer for packaging.
+
+```sh
+npm run build:renderer
+```
+
+Outputs the static renderer app to `renderer-dist/`.
 
 ---
 
@@ -493,7 +511,7 @@ Package app without creating distributables.
 npm run package
 ```
 
-Runs: `electron-forge package`
+Builds the renderer, then runs `electron-forge package`.
 
 ---
 
@@ -505,7 +523,7 @@ Create distributables.
 npm run make
 ```
 
-Runs: `electron-forge make`
+Builds the renderer, then runs `electron-forge make`.
 
 ---
 

@@ -13,10 +13,12 @@
     "inline-worker": "inline-worker-module hello-pear-worker",
     "lint": "prettier --check . && lunte",
     "format": "prettier --write . && lunte --fix",
-    "start": "electron-forge start -- --no-updates",
-    "package": "electron-forge package",
-    "make": "electron-forge make",
-    "make:mas": "electron-forge make --platform=mas",
+    "start": "node scripts/dev.js",
+    "start:electron": "electron-forge start -- --no-updates",
+    "build:renderer": "tsc --noEmit && vite build",
+    "package": "npm run build:renderer && electron-forge package",
+    "make": "npm run build:renderer && electron-forge make",
+    "make:mas": "npm run build:renderer && electron-forge make --platform=mas",
     "install:all": "npm i --ignore-scripts=true && npm run postinstall:all",
     "install:mac": "npm i --ignore-scripts=true && npm run postinstall:mac",
     "postinstall:all": "npm run install:electron",
@@ -35,6 +37,9 @@
     "paparam": "^1.10.0",
     "pear-mobile": "^4.3.0",
     "pear-runtime": "^1.3.1",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "styled-components": "^6.6.0",
     "which-runtime": "^1.4.0"
   },
   "devDependencies": {
@@ -42,6 +47,9 @@
     "@electron-forge/maker-dmg": "^8.0.1",
     "@electron-forge/maker-msix": "^8.0.1",
     "@electron-forge/maker-pkg": "^8.0.1",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.3.0",
     "app-builder-lib": "^26.8.1",
     "electron": "^42.0.1",
     "electron-forge-plugin-prune-prebuilds": "^2.0.0",
@@ -54,7 +62,9 @@
     "pear-electron-forge-maker-flatpak": "^1.0.0",
     "pear-electron-forge-maker-snap": "^2.0.0",
     "prettier": "^3.8.1",
-    "prettier-config-holepunch": "^2.0.0"
+    "prettier-config-holepunch": "^2.0.0",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.8"
   },
   "allowScripts": {
     "electron@40.10.1": true,
