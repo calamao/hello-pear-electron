@@ -2,8 +2,9 @@ import { useState } from 'react'
 import { createGlobalStyle } from 'styled-components'
 import TicTacToeApp from '@hello-pear/ui-tic-tac-toe'
 import { WorkerPingPongTest, WorkerUpdatesTest } from './worker-tools'
+import { NotesPanel } from './notes-panel'
 
-export type AppView = 'games' | 'worker-ping' | 'updates-test'
+export type AppView = 'games' | 'worker-ping' | 'updates-test' | 'notes'
 
 const GlobalStyle = createGlobalStyle`
   * {
@@ -44,6 +45,7 @@ export default function App() {
         onNavigate={setActiveView}
         workerPingTest={<WorkerPingPongTest active={activeView === 'worker-ping'} />}
         workerUpdatesTest={<WorkerUpdatesTest />}
+        notesView={<NotesPanel active={activeView === 'notes'} />}
       />
     </>
   )

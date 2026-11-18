@@ -8,6 +8,12 @@ import dir = require('bare-storage')
 import { isBareKit } from 'which-runtime'
 import { helloWorld as helloPearWorker } from '@hello-pear/worker-hello-pear'
 import { helloWorld as helloWorldWorker } from '@hello-pear/worker-hello-world'
+import Autopass = require('autopass')
+import {
+  createAutopassNotesApi,
+  handleNotesRequest,
+  isNotesRequest
+} from '@hello-pear/worker-notes'
 
 type FrameData = { toString(): string }
 
@@ -24,8 +30,11 @@ const updaterConfig = {
 
 const pipe = new FramedStream(Bare.IPC)
 const store = new Corestore(path.join(updaterConfig.dir, 'pear-runtime', 'corestore'))
+const notesStore = new Corestore(path.join(updaterConfig.dir, 'app-storage', 'notes'))
 const swarm = new Hyperswarm()
 const pear = new PearRuntime({ ...updaterConfig, swarm, store })
+const notesPass = new Autopass(notesStore)
+const notesApi = createAutopassNotesApi(notesPass)
 
 pear.updater.on('error', (err) => pipe.write('updater-error ' + err.message))
 
@@ -43,6 +52,8 @@ pear.updater.on('updated', () => pipe.write('updated'))
 pear.on('minver-required', () => pipe.write('minver-required'))
 
 goodbye(async () => {
+  await notesPass.close()
+  await notesStore.close()
   await swarm.destroy()
   await pear.close()
   await store.close()
@@ -80,6 +91,10 @@ pipe.on('data', async (data: FrameData) => {
     pipe.write(
       JSON.stringify({ type: 'pong', time: new Date().toISOString(), text: 'Hello from worker' })
     )
+    return
+  }
+  if (isNotesRequest(parsed)) {
+    pipe.write(JSON.stringify(await handleNotesRequest(notesApi, parsed, notesPass.ready())))
     return
   }
   pipe.write('unknown-message ' + message)

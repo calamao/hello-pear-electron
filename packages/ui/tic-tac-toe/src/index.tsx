@@ -8,7 +8,7 @@ import {
 } from '@hello-pear/tic-tac-toe-api'
 
 type Filter = 'all' | 'active' | 'finished'
-export type AppView = 'games' | 'worker-ping' | 'updates-test'
+export type AppView = 'games' | 'worker-ping' | 'updates-test' | 'notes'
 
 const Shell = styled.main`
   min-height: 100vh;
@@ -644,6 +644,7 @@ export interface TicTacToeAppProps {
   onNavigate?: (view: AppView) => void
   workerPingTest?: ReactNode
   workerUpdatesTest?: ReactNode
+  notesView?: ReactNode
 }
 
 export default function TicTacToeApp({
@@ -651,7 +652,8 @@ export default function TicTacToeApp({
   activeView = 'games',
   onNavigate,
   workerPingTest,
-  workerUpdatesTest
+  workerUpdatesTest,
+  notesView
 }: TicTacToeAppProps) {
   const [gameApi] = useState<TicTacToeApi>(() => api ?? createInMemoryTicTacToeApi())
   const [games, setGames] = useState<TicTacToeGame[]>([])
@@ -743,6 +745,14 @@ export default function TicTacToeApp({
           >
             <NavIcon>⟳</NavIcon>
             <span>Updates test</span>
+          </NavButton>
+          <NavButton
+            aria-label='My notes'
+            $active={activeView === 'notes'}
+            onClick={() => onNavigate?.('notes')}
+          >
+            <NavIcon>▤</NavIcon>
+            <span>My notes</span>
           </NavButton>
           <NavButton>
             <NavIcon>＋</NavIcon>
@@ -850,6 +860,7 @@ export default function TicTacToeApp({
         )}
         <div hidden={activeView !== 'worker-ping'}>{workerPingTest}</div>
         <div hidden={activeView !== 'updates-test'}>{workerUpdatesTest}</div>
+        <div hidden={activeView !== 'notes'}>{notesView}</div>
       </Main>
 
       {createOpen && (

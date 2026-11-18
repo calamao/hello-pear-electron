@@ -3,6 +3,21 @@ declare const Bare: {
   IPC: unknown
 }
 
+declare module 'autopass' {
+  class Autopass {
+    constructor(store: object)
+    ready(): Promise<void>
+    close(): Promise<void>
+    add(key: string, value: string): Promise<void>
+    get(key: string): Promise<{ value: string } | null>
+    list(): { toArray(): Promise<Array<{ key: string; value: string }>> }
+    remove(key: string): Promise<void>
+    createInvite(options: { readOnly: boolean }): Promise<string>
+  }
+
+  export = Autopass
+}
+
 declare module 'pear-runtime' {
   class PearRuntime {
     constructor(options: Record<string, unknown>)
