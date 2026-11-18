@@ -62,7 +62,7 @@ function errorMessage(error: unknown) {
   return error instanceof Error ? error.message : String(error)
 }
 
-function isPong(message: unknown): message is { type: 'pong'; time: string } {
+function isPong(message: unknown): message is { type: 'pong'; time: string, text?: string } {
   return (
     typeof message === 'object' &&
     message !== null &&
@@ -113,7 +113,7 @@ export default function App() {
         }
       }
 
-      if (isPong(parsed)) setPong(`Worker time: ${parsed.time}`)
+      if (isPong(parsed)) setPong(`Worker time: ${parsed.time}, text: ${parsed.text ?? ''}`)
 
       if (!sentHello) {
         sentHello = true

@@ -187,33 +187,15 @@ open -n <name>.app --args --storage /tmp/custom/storage
 
 ### Workers <a name="workers"></a>
 
-The idea is to put application peer-to-peer code into a main worker that then acts as a local backend for the application view layer.
+The application worker source is `workers/main.ts`. `npm run build:worker`
+compiles it to `workers-dist/main.js`, which Electron launches in a Bare
+sidecar. The older JavaScript worker is retained as
+`workers/main.deprecated.js` for reference only; Electron does not launch it.
 
-```js
-const IPC = pear.run('./workers/main.js', [pear.storage])
-IPC.on('data', (data) => {
-  console.log('data from worker', data)
-})
-IPC.write('hello')
-```
-
-The `workers/main.js` would then be executed with an embedded Bare runtime.
-
-The other side of the IPC stream can be accessed inside the worker as `Bare.IPC`.
-
-Note how `pear.storage` is passed in as the first argument, this can be accessed via `Bare.argv[2]`.
-
-```js
-const Corestore = require('corestore')
-const storage = Bare.argv[2]
-
-Bare.IPC.on('data', (data) => console.log(data.toString()))
-
-Bare.IPC.write('Hello from worker')
-
-const corestore = new Corestore(storage)
-//.. do more with corestore..
-```
+The renderer refers to the active worker using the stable IPC identifier
+`'/workers/main.js'`. This identifier is not a filesystem path: Electron maps
+it to the compiled worker. The worker communicates with Electron over
+`Bare.IPC`, framed by `FramedStream`.
 
 ## Peer-to-Peer Deployments <a name="deployments"></a>
 

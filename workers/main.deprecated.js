@@ -1,4 +1,5 @@
 // https://github.com/holepunchto/hello-pear-worker v1.2.0
+// Deprecated: Electron launches workers-dist/main.js, compiled from main.ts.
 
 const PearRuntime = require('pear-runtime') // pear-runtime on desktop; pear-mobile on mobile
 const Hyperswarm = require('hyperswarm')

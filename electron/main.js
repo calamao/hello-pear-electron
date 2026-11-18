@@ -92,7 +92,11 @@ function getWorker(specifier) {
 
   const extension = isLinux ? '.AppImage' : isMac ? '.app' : '.msix'
 
-  const worker = PearRuntime.run(require.resolve('..' + specifier), [
+  const entrypoint =
+    specifier === mainWorkerSpecifier
+      ? require.resolve('../workers-dist/main.js')
+      : require.resolve('..' + specifier)
+  const worker = PearRuntime.run(entrypoint, [
     shouldUpdate(),
     version,
     upgrade,

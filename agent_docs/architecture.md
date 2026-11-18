@@ -5,7 +5,8 @@
 > the code is the reference for everything else. Index: [AGENTS.md](../AGENTS.md).
 
 Renderer (sandboxed) ↔ `window.bridge` (Electron IPC) ↔ main (broker only) ↔ fd-3
-FramedStream pipe ↔ Bare worker (`hello-pear-worker`: swarm + corestore + updater).
+FramedStream pipe ↔ Bare worker (`workers/main.ts` compiled to
+`workers-dist/main.js`: swarm + corestore + updater).
 The code is small — read it for the wiring; below are only the non-obvious facts.
 
 - The renderer is a React + TypeScript app in `renderer/src/`, styled with
@@ -25,7 +26,10 @@ The code is small — read it for the wiring; below are only the non-obvious fac
   is shared with `pear-mobile` hosts.)
 - The worker is a module for cross-platform reuse (desktop + mobile). For a
   single-platform project, copy `hello-pear-worker/index.js` into
-  `workers/main.js` and develop it in-project (per that package's README).
+  `workers/main.ts` and develop it in-project (per that package's README). The
+  TypeScript build emits `workers-dist/main.js`, and `electron/main.js` maps the
+  stable `'/workers/main.js'` specifier to that compiled entrypoint. The legacy
+  `workers/main.deprecated.js` is retained for reference and is not launched.
 - Once the worker is in-project it resolves against **this** `package.json`, not the
   package's — so Node builtins it uses need an `imports` entry (see AGENTS.md
   contracts). A missing entry only fails in a packaged build.
