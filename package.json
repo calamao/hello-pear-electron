@@ -64,6 +64,7 @@
     "@hello-pear/tic-tac-toe-api": "0.0.1",
     "@hello-pear/ui-hello-pear": "0.0.1",
     "@hello-pear/ui-hello-world": "0.0.1",
+    "@hello-pear/ui-notes": "0.0.1",
     "@hello-pear/ui-tic-tac-toe": "0.0.1",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",

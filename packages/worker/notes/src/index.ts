@@ -29,6 +29,14 @@ const noteKeyPrefix = 'notes:'
 export function createAutopassNotesApi(pass: AutopassNotesPass): NotesApi {
   let nextId = 1
 
+  async function getNote(noteId: string) {
+    const record = await pass.get(noteKey(noteId))
+    if (record === null) {
+      throw new Error('Note not found')
+    }
+    return JSON.parse(record.value) as Note
+  }
+
   return {
     async create(input: CreateNoteInput) {
       const title = input.title.trim()
@@ -54,6 +62,7 @@ export function createAutopassNotesApi(pass: AutopassNotesPass): NotesApi {
         .map((record) => JSON.parse(record.value) as Note)
         .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))
     },
+    get: getNote,
     async delete(noteId: string) {
       const key = noteKey(noteId)
       if ((await pass.get(key)) === null) {
@@ -62,13 +71,10 @@ export function createAutopassNotesApi(pass: AutopassNotesPass): NotesApi {
       await pass.remove(key)
     },
     async share(noteId: string) {
-      const note = await pass.get(noteKey(noteId))
-      if (note === null) {
-        throw new Error('Note not found')
-      }
+      const note = await getNote(noteId)
       // Autopass invites pair the whole pass, not an individual note.
       const invite = await pass.createInvite({ readOnly: false })
-      return { note: JSON.parse(note.value) as Note, invite }
+      return { note, invite }
     }
   }
 }
@@ -101,6 +107,7 @@ export function isNotesRequest(value: unknown): value is NotesRequest {
       )
     case 'notes:list':
       return true
+    case 'notes:get':
     case 'notes:delete':
     case 'notes:share':
       return 'noteId' in value && typeof value.noteId === 'string'
@@ -132,6 +139,12 @@ export async function handleNotesRequest(
           requestId: request.requestId,
           notes: await api.list()
         }
+      case 'notes:get':
+        return {
+          type: 'notes:got',
+          requestId: request.requestId,
+          note: await api.get(request.noteId)
+        }
       case 'notes:delete':
         await api.delete(request.noteId)
         return { type: 'notes:deleted', requestId: request.requestId, noteId: request.noteId }
@@ -143,14 +156,14 @@ export async function handleNotesRequest(
         }
     }
   } catch (error) {
-    const operation: NotesOperation =
-      request.type === 'notes:create'
-        ? 'create'
-        : request.type === 'notes:list'
-          ? 'list'
-          : request.type === 'notes:delete'
-            ? 'delete'
-            : 'share'
+    const operations: Record<NotesRequest['type'], NotesOperation> = {
+      'notes:create': 'create',
+      'notes:list': 'list',
+      'notes:get': 'get',
+      'notes:delete': 'delete',
+      'notes:share': 'share'
+    }
+    const operation = operations[request.type]
     return {
       type: 'notes:error',
       requestId: request.requestId,

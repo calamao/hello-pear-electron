@@ -1,9 +1,7 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import styled from 'styled-components'
-import type { Note, NotesCommand, NotesResponse } from '@hello-pear/shared-types'
-
-const mainWorker = '/workers/main.js'
-const decoder = new TextDecoder('utf-8')
+import type { Note } from '@hello-pear/shared-types'
+import { createNotesClient, type NotesClient } from '@hello-pear/ui-notes'
 
 const Panel = styled.section`
   max-width: 760px;
@@ -72,61 +70,8 @@ const Status = styled.p`
   overflow-wrap: anywhere;
 `
 
-function isNotesResponse(value: unknown): value is NotesResponse {
-  if (
-    typeof value !== 'object' ||
-    value === null ||
-    !('type' in value) ||
-    !('requestId' in value) ||
-    typeof value.requestId !== 'string'
-  ) {
-    return false
-  }
-
-  switch (value.type) {
-    case 'notes:created':
-      return 'note' in value && isNote(value.note)
-    case 'notes:shared':
-      return (
-        'note' in value &&
-        isNote(value.note) &&
-        'invite' in value &&
-        typeof value.invite === 'string'
-      )
-    case 'notes:list:result':
-      return 'notes' in value && Array.isArray(value.notes) && value.notes.every(isNote)
-    case 'notes:deleted':
-      return 'noteId' in value && typeof value.noteId === 'string'
-    case 'notes:error':
-      return (
-        'error' in value &&
-        typeof value.error === 'string' &&
-        'operation' in value &&
-        (value.operation === 'create' ||
-          value.operation === 'list' ||
-          value.operation === 'delete' ||
-          value.operation === 'share')
-      )
-    default:
-      return false
-  }
-}
-
-function isNote(value: unknown): value is Note {
-  return (
-    typeof value === 'object' &&
-    value !== null &&
-    'id' in value &&
-    typeof value.id === 'string' &&
-    'title' in value &&
-    typeof value.title === 'string' &&
-    'content' in value &&
-    typeof value.content === 'string' &&
-    'createdAt' in value &&
-    typeof value.createdAt === 'string' &&
-    'updatedAt' in value &&
-    typeof value.updatedAt === 'string'
-  )
+function errorMessage(error: unknown) {
+  return error instanceof Error ? error.message : String(error)
 }
 
 export function NotesPanel({ active }: { active: boolean }) {
@@ -135,86 +80,81 @@ export function NotesPanel({ active }: { active: boolean }) {
   const [content, setContent] = useState('')
   const [shareInvite, setShareInvite] = useState('')
   const [status, setStatus] = useState('')
-  const requestId = useRef(0)
-  const send = useCallback((request: NotesCommand) => {
-    const message = { ...request, requestId: `notes-${++requestId.current}` }
-    void window.bridge
-      .writeWorkerIPC(mainWorker, JSON.stringify(message))
-      .catch((error: unknown) => {
-        setStatus(`Worker IPC failed: ${error instanceof Error ? error.message : String(error)}`)
-      })
-  }, [])
+  const clientRef = useRef<NotesClient | null>(null)
 
   useEffect(() => {
     if (!active) return
 
-    const offWorkerIPC = window.bridge.onWorkerIPC(mainWorker, (data) => {
-      let parsed: unknown
-      try {
-        parsed = JSON.parse(decoder.decode(data)) as unknown
-      } catch {
-        return
-      }
-      if (!isNotesResponse(parsed)) return
+    const client = createNotesClient(window.bridge)
+    clientRef.current = client
+    let mounted = true
+    setStatus('Loading notes...')
 
-      switch (parsed.type) {
-        case 'notes:created':
-          setNotes((current) => [
-            parsed.note,
-            ...current.filter((note) => note.id !== parsed.note.id)
-          ])
-          setStatus('Note created.')
-          break
-        case 'notes:list:result':
-          setNotes(parsed.notes)
-          setStatus(`${parsed.notes.length} ${parsed.notes.length === 1 ? 'note' : 'notes'}.`)
-          break
-        case 'notes:deleted':
-          setNotes((current) => current.filter((note) => note.id !== parsed.noteId))
-          setStatus('Note deleted.')
-          break
-        case 'notes:shared':
-          setShareInvite(parsed.invite)
-          setStatus('Read-only invite created for the entire notes vault.')
-          break
-        case 'notes:error':
-          setStatus(`Could not ${parsed.operation} note: ${parsed.error}`)
-          break
-      }
-    })
-
-    void window.bridge
-      .startWorker(mainWorker)
-      .then((started) => {
-        if (!started) {
-          setStatus('Worker did not start.')
-          return
-        }
-        send({ type: 'notes:list' })
+    void client
+      .listNotes()
+      .then((items) => {
+        if (!mounted) return
+        setNotes(items)
+        setStatus(`${items.length} ${items.length === 1 ? 'note' : 'notes'}.`)
       })
       .catch((error: unknown) => {
-        setStatus(
-          `Worker failed to start: ${error instanceof Error ? error.message : String(error)}`
-        )
+        if (mounted) setStatus(`Could not load notes: ${errorMessage(error)}`)
       })
 
-    return () => offWorkerIPC()
-  }, [active, send])
+    return () => {
+      mounted = false
+      if (clientRef.current === client) clientRef.current = null
+      client.close()
+    }
+  }, [active])
 
-  function createNote(event: React.FormEvent<HTMLFormElement>) {
+  async function createNote(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    send({ type: 'notes:create', input: { title, content } })
-    setTitle('')
-    setContent('')
     setStatus('Creating note...')
+    try {
+      const note = await requireClient().createNote({ title, content })
+      setNotes((current) => [note, ...current.filter((item) => item.id !== note.id)])
+      setTitle('')
+      setContent('')
+      setStatus('Note created.')
+    } catch (error) {
+      setStatus(`Could not create note: ${errorMessage(error)}`)
+    }
+  }
+
+  async function deleteNote(noteId: string) {
+    setStatus('Deleting note...')
+    try {
+      await requireClient().deleteNote(noteId)
+      setNotes((current) => current.filter((note) => note.id !== noteId))
+      setStatus('Note deleted.')
+    } catch (error) {
+      setStatus(`Could not delete note: ${errorMessage(error)}`)
+    }
+  }
+
+  async function shareNote(noteId: string) {
+    setStatus('Creating vault invite...')
+    try {
+      const result = await requireClient().shareNote(noteId)
+      setShareInvite(result.invite)
+      setStatus('Invite created for the entire notes vault.')
+    } catch (error) {
+      setStatus(`Could not create vault invite: ${errorMessage(error)}`)
+    }
+  }
+
+  function requireClient() {
+    if (!clientRef.current) throw new Error('Notes client is not active')
+    return clientRef.current
   }
 
   return (
     <Panel>
       <h1>My notes</h1>
-      <p>Create and delete notes, or create a read-only invite for the entire notes vault.</p>
+      <p>Create and delete notes, or create an invite for the entire notes vault.</p>
       {shareInvite && <Status role='status'>Vault invite: {shareInvite}</Status>}
-      <Form onSubmit={createNote}>
+      <Form onSubmit={(event) => void createNote(event)}>
         <Input
           aria-label='Note title'
           placeholder='Title'
@@ -236,10 +176,10 @@ export function NotesPanel({ active }: { active: boolean }) {
           <h2>{note.title}</h2>
           <p>{note.content}</p>
           <NoteActions>
-            <Button type='button' onClick={() => send({ type: 'notes:share', noteId: note.id })}>
+            <Button type='button' onClick={() => void shareNote(note.id)}>
               Share vault
             </Button>
-            <Button type='button' onClick={() => send({ type: 'notes:delete', noteId: note.id })}>
+            <Button type='button' onClick={() => void deleteNote(note.id)}>
               Delete
             </Button>
           </NoteActions>
