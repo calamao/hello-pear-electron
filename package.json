@@ -1,7 +1,7 @@
 {
   "name": "hello-jorge-pear-electron",
-  "productName": "HelloPear Electron",
-  "version": "0.0.1",
+  "productName": "HelloPear-Electron",
+  "version": "1.0.0",
   "upgrade": "pear://x7cu7u88j6riqkr1in6fcwubo5bx6dztg65sebmzhje4h98x3dqy",
   "description": "Test Electron app for HelloPear with Notes",
   "license": "MIT",
