@@ -6,6 +6,8 @@ import FramedStream = require('framed-stream')
 import path = require('bare-path')
 import dir = require('bare-storage')
 import { isBareKit } from 'which-runtime'
+import { helloWorld as helloPearWorker } from '@hello-pear/worker-hello-pear'
+import { helloWorld as helloWorldWorker } from '@hello-pear/worker-hello-world'
 
 type FrameData = { toString(): string }
 
@@ -83,4 +85,4 @@ pipe.on('data', async (data: FrameData) => {
   pipe.write('unknown-message ' + message)
 })
 
-pipe.write('Hello from worker')
+pipe.write(`${helloWorldWorker()} ${helloPearWorker()}`)

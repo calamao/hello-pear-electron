@@ -187,9 +187,20 @@ open -n <name>.app --args --storage /tmp/custom/storage
 
 ### Workers <a name="workers"></a>
 
-The application worker source is `workers/main.ts`. `npm run build:worker`
-compiles it to `workers-dist/main.js`, which Electron launches in a Bare
-sidecar. The older JavaScript worker is retained as
+The monorepo uses npm workspaces under `packages/`: `packages/ui/` contains
+renderer packages, and `packages/worker/` contains Bare worker packages. The two
+groups are independent; packages in one group should not import packages from the
+other. The renderer imports the UI workspaces and Vite bundles them into
+`renderer-dist/`.
+
+The application worker source is `workers/main.ts`. `npm run build:packages`
+runs any workspace `build` scripts with npm's workspace runner, so new packages
+do not need to be listed in the root build script. The UI packages are bundled
+by Vite as part of `npm run build:renderer`. `npm run build:worker` runs package
+builds before compiling the main worker to
+`workers-dist/main.js`, which Electron launches in a Bare sidecar. Worker
+workspaces are production dependencies so their compiled output is included in
+packaged apps. The older JavaScript worker is retained as
 `workers/main.deprecated.js` for reference only; Electron does not launch it.
 
 The renderer refers to the active worker using the stable IPC identifier

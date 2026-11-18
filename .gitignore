@@ -1,4 +1,6 @@
 out/
 renderer-dist/
+workers-dist/
+packages/worker/*/dist/
 node_modules/
 todo

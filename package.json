@@ -9,6 +9,10 @@
   "type": "commonjs",
   "main": "electron/main.js",
   "private": true,
+  "workspaces": [
+    "packages/ui/*",
+    "packages/worker/*"
+  ],
   "scripts": {
     "inline-worker": "inline-worker-module hello-pear-worker",
     "lint": "prettier --check . && lunte",
@@ -17,7 +21,8 @@
     "prestart:electron": "npm run build:worker",
     "start:electron": "electron-forge start -- --no-updates",
     "build:renderer": "tsc --noEmit && vite build",
-    "build:worker": "tsc --project workers/tsconfig.json",
+    "build:packages": "npm run build --workspaces --if-present",
+    "build:worker": "npm run build:packages && tsc --project workers/tsconfig.json",
     "package": "npm run build:renderer && npm run build:worker && electron-forge package",
     "make": "npm run build:renderer && npm run build:worker && electron-forge make",
     "make:mas": "npm run build:renderer && npm run build:worker && electron-forge make --platform=mas",
@@ -30,6 +35,8 @@
     "install:fs-xattr": "cd node_modules/fs-xattr && node-gyp rebuild"
   },
   "dependencies": {
+    "@hello-pear/worker-hello-pear": "0.0.1",
+    "@hello-pear/worker-hello-world": "0.0.1",
     "bare-path": "^3.1.2",
     "bare-storage": "^1.1.0",
     "corestore": "^7.15.0",
@@ -49,6 +56,8 @@
     "@electron-forge/maker-dmg": "^8.0.1",
     "@electron-forge/maker-msix": "^8.0.1",
     "@electron-forge/maker-pkg": "^8.0.1",
+    "@hello-pear/ui-hello-pear": "0.0.1",
+    "@hello-pear/ui-hello-world": "0.0.1",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
     "@vitejs/plugin-react": "^6.3.0",

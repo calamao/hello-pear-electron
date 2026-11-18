@@ -28,7 +28,9 @@ The code is small — read it for the wiring; below are only the non-obvious fac
   single-platform project, copy `hello-pear-worker/index.js` into
   `workers/main.ts` and develop it in-project (per that package's README). The
   TypeScript build emits `workers-dist/main.js`, and `electron/main.js` maps the
-  stable `'/workers/main.js'` specifier to that compiled entrypoint. The legacy
+  stable `'/workers/main.js'` specifier to that compiled entrypoint. Local
+  `packages/worker/*` workspaces compile before the worker and are production
+  dependencies so Bare can resolve them in packaged apps. The legacy
   `workers/main.deprecated.js` is retained for reference and is not launched.
 - Once the worker is in-project it resolves against **this** `package.json`, not the
   package's — so Node builtins it uses need an `imports` entry (see AGENTS.md

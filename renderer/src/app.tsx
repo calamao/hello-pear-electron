@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import styled, { createGlobalStyle } from 'styled-components'
+import { helloWorld as helloPearUI } from '@hello-pear/ui-hello-pear'
+import { helloWorld as helloWorldUI } from '@hello-pear/ui-hello-world'
 
 const mainWorker = '/workers/main.js'
 const decoder = new TextDecoder('utf-8')
@@ -62,7 +64,7 @@ function errorMessage(error: unknown) {
   return error instanceof Error ? error.message : String(error)
 }
 
-function isPong(message: unknown): message is { type: 'pong'; time: string, text?: string } {
+function isPong(message: unknown): message is { type: 'pong'; time: string; text?: string } {
   return (
     typeof message === 'object' &&
     message !== null &&
@@ -162,6 +164,9 @@ export default function App() {
       <Page>
         <Content>
           <Title>{title}</Title>
+          <Message>
+            {helloWorldUI()} {helloPearUI()}
+          </Message>
           <Button $hidden={!updateReady} disabled={applyingUpdate} onClick={applyUpdate}>
             {applyingUpdate ? 'Updating...' : 'Apply update'}
           </Button>
