@@ -26,9 +26,9 @@ The code is small — read it for the wiring; below are only the non-obvious fac
 - Once the worker is in-project it resolves against **this** `package.json`, not the
   package's — so Node builtins it uses need an `imports` entry (see AGENTS.md
   contracts). A missing entry only fails in a packaged build.
-- Pipe protocol = plain UTF-8 strings in FramedStream frames, matched by exact
-  equality. Unknown →worker strings get `console.log`ged; unknown worker→ strings
-  are forwarded to the renderer.
+- Pipe protocol = UTF-8 strings in FramedStream frames: exact-match updater control
+  messages and JSON app messages (`ping`/`pong`). Unrecognized worker inputs get an
+  `unknown-message` reply; worker→renderer strings are forwarded unchanged.
 - `pear:applyUpdate` is hardwired to `'/workers/main.js'`, lazily respawns a dead
   worker, and its promise has no reject/timeout — any failure = renderer hangs.
 - `sendToAll` broadcasts every worker channel to **all** windows; nothing restarts

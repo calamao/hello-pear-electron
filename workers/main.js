@@ -56,18 +56,30 @@ goodbye(async () => {
 
 pipe.on('data', async (data) => {
   const message = data.toString()
-  if (message !== 'pear:applyUpdate') {
+  if (message === 'pear:applyUpdate') {
+    try {
+      await pear.ready()
+      await pear.updater.applyUpdate()
+      pipe.write('pear:updateApplied')
+    } catch (err) {
+      pipe.write('pear:updateFailed ' + err.message)
+    }
+    return
+  }
+
+  let msg
+  try {
+    msg = JSON.parse(message)
+  } catch {
     pipe.write('unknown-message ' + message)
     return
   }
 
-  try {
-    await pear.ready()
-    await pear.updater.applyUpdate()
-    pipe.write('pear:updateApplied')
-  } catch (err) {
-    pipe.write('pear:updateFailed ' + err.message)
+  if (msg?.type === 'ping') {
+    pipe.write(JSON.stringify({ type: 'pong', time: new Date().toISOString() }))
+    return
   }
+  pipe.write('unknown-message ' + message)
 })
 
 pipe.write('Hello from worker')
