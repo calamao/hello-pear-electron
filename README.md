@@ -1,10 +1,10 @@
 # Tic Tac Toe
 
-A Tic Tac Toe game app built on top of the Autopass API.
+A Tic Tac Toe multiplayer game app built on top of the Autopass API.
 
 ## Demo
 
-<video src="./docs/assets/Cap%202026-11-18%20at%2018.25.03.mp4" controls width="100%"></video>
+[Watch or download the compressed demo video](./assets/tic-tac-toe-demo.mp4).
 
 ## Screenshots
 
