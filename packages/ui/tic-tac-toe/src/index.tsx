@@ -6,6 +6,7 @@ import {
   type TicTacToeApi,
   type TicTacToeGame
 } from '@hello-pear/tic-tac-toe-api'
+import { GameResultAnimation } from './game-result-animation'
 
 type Filter = 'all' | 'active' | 'finished'
 export type AppView = 'games' | 'worker-ping' | 'updates-test' | 'notes'
@@ -824,290 +825,288 @@ export default function TicTacToeApp({
   }
 
   return (
-    <Shell>
-      <Sidebar>
-        <Brand>
-          <BrandMark>O</BrandMark>
-          <BrandName>Good Game</BrandName>
-        </Brand>
-        <Nav>
-          <NavButton
-            aria-label='My games'
-            $active={activeView === 'games'}
-            onClick={() => onNavigate?.('games')}
-          >
-            <NavIcon>▦</NavIcon>
-            <span>My games</span>
-          </NavButton>
-          <NavButton
-            aria-label='Worker ping test'
-            $active={activeView === 'worker-ping'}
-            onClick={() => onNavigate?.('worker-ping')}
-          >
-            <NavIcon>↔</NavIcon>
-            <span>Worker ping</span>
-          </NavButton>
-          <NavButton
-            aria-label='Updates test'
-            $active={activeView === 'updates-test'}
-            onClick={() => onNavigate?.('updates-test')}
-          >
-            <NavIcon>⟳</NavIcon>
-            <span>Updates test</span>
-          </NavButton>
-          <NavButton
-            aria-label='My notes'
-            $active={activeView === 'notes'}
-            onClick={() => onNavigate?.('notes')}
-          >
-            <NavIcon>▤</NavIcon>
-            <span>My notes</span>
-          </NavButton>
-          <NavButton>
-            <NavIcon>＋</NavIcon>
-            <span>Create</span>
-          </NavButton>
-          <NavButton>
-            <NavIcon>◎</NavIcon>
-            <span>Friends</span>
-          </NavButton>
-        </Nav>
-        <Profile>
-          <Avatar $color='#baff39'>YO</Avatar>
-          <ProfileText>
-            <strong>Your profile</strong>
-            <span>Ready to play</span>
-          </ProfileText>
-        </Profile>
-      </Sidebar>
+    <>
+      <Shell>
+        <Sidebar>
+          <Brand>
+            <BrandMark>O</BrandMark>
+            <BrandName>Good Game</BrandName>
+          </Brand>
+          <Nav>
+            <NavButton
+              aria-label='My games'
+              $active={activeView === 'games'}
+              onClick={() => onNavigate?.('games')}
+            >
+              <NavIcon>▦</NavIcon>
+              <span>My games</span>
+            </NavButton>
+            
+            <NavButton
+              aria-label='My notes'
+              $active={activeView === 'notes'}
+              onClick={() => onNavigate?.('notes')}
+            >
+              <NavIcon>▤</NavIcon>
+              <span>My notes</span>
+            </NavButton>
+            <NavButton
+              aria-label='Worker ping test'
+              $active={activeView === 'worker-ping'}
+              onClick={() => onNavigate?.('worker-ping')}
+            >
+              <NavIcon>↔</NavIcon>
+              <span>Worker ping</span>
+            </NavButton>
+            <NavButton
+              aria-label='Updates test'
+              $active={activeView === 'updates-test'}
+              onClick={() => onNavigate?.('updates-test')}
+            >
+              <NavIcon>⟳</NavIcon>
+              <span>Updates test</span>
+            </NavButton>
+          </Nav>
+          <Profile>
+            <Avatar $color='#baff39'>YO</Avatar>
+            <ProfileText>
+              <strong>Your profile</strong>
+              <span>Ready to play</span>
+            </ProfileText>
+          </Profile>
+        </Sidebar>
 
-      <Main>
-        {activeView === 'games' && (
-          <>
-            <Header>
-              <div>
-                <Eyebrow>Welcome back</Eyebrow>
-                <Title>My games</Title>
-              </div>
-              <HeaderActions>
-                <SecondaryButton onClick={() => setJoinOpen(true)}>Join game</SecondaryButton>
-                <PrimaryButton onClick={() => setCreateOpen(true)}>
-                  <Plus>＋</Plus>
-                  <span>New game</span>
-                </PrimaryButton>
-              </HeaderActions>
-            </Header>
+        <Main>
+          {activeView === 'games' && (
+            <>
+              <Header>
+                <div>
+                  <Eyebrow>Welcome back</Eyebrow>
+                  <Title>My games</Title>
+                </div>
+                <HeaderActions>
+                  <SecondaryButton onClick={() => setJoinOpen(true)}>Join game</SecondaryButton>
+                  <PrimaryButton onClick={() => setCreateOpen(true)}>
+                    <Plus>＋</Plus>
+                    <span>New game</span>
+                  </PrimaryButton>
+                </HeaderActions>
+              </Header>
 
-            {error && <ErrorMessage role='alert'>{error}</ErrorMessage>}
+              {error && <ErrorMessage role='alert'>{error}</ErrorMessage>}
 
-            <Toolbar>
-              <Tabs>
-                <Tab $active={filter === 'all'} onClick={() => setFilter('all')}>
-                  All
-                </Tab>
-                <Tab $active={filter === 'active'} onClick={() => setFilter('active')}>
-                  In play
-                </Tab>
-                <Tab $active={filter === 'finished'} onClick={() => setFilter('finished')}>
-                  Finished
-                </Tab>
-              </Tabs>
-              <Count>
-                {visibleGames.length} {visibleGames.length === 1 ? 'game' : 'games'}
-              </Count>
-            </Toolbar>
+              <Toolbar>
+                <Tabs>
+                  <Tab $active={filter === 'all'} onClick={() => setFilter('all')}>
+                    All
+                  </Tab>
+                  <Tab $active={filter === 'active'} onClick={() => setFilter('active')}>
+                    In play
+                  </Tab>
+                  <Tab $active={filter === 'finished'} onClick={() => setFilter('finished')}>
+                    Finished
+                  </Tab>
+                </Tabs>
+                <Count>
+                  {visibleGames.length} {visibleGames.length === 1 ? 'game' : 'games'}
+                </Count>
+              </Toolbar>
 
-            <Grid>
-              {visibleGames.map((game) => (
-                <Card key={game.id} $finished={game.status === 'finished'}>
-                  <CardHeader>
-                    <GameTitle>{game.title}</GameTitle>
-                    <StatusPill $status={game.status}>{statusLabel(game)}</StatusPill>
-                  </CardHeader>
-                  <Players>
-                    <PlayerAvatar $color={game.me.color}>{game.me.initial}</PlayerAvatar>
-                    {game.opponent ? (
-                      <>
-                        <AvatarWithOffset $color={game.opponent.color}>
-                          {game.opponent.initial}
-                        </AvatarWithOffset>
-                        <Versus>vs. {game.opponent.name}</Versus>
-                      </>
-                    ) : (
-                      <Versus>Waiting for a friend</Versus>
-                    )}
-                  </Players>
-                  <MiniBoard>
-                    {game.board.map((mark, index) => (
-                      <MiniSquare key={index} data-mark={mark ?? ''}>
-                        {mark}
-                      </MiniSquare>
-                    ))}
-                  </MiniBoard>
-                  <CardFooter>
-                    <Updated>{game.updatedAt}</Updated>
-                    <CardActions>
-                      <IconButton
-                        aria-label={`Delete ${game.title}`}
-                        onClick={() => void deleteGame(game.id)}
-                      >
-                        ×
-                      </IconButton>
-                      {game.status === 'new' || game.status === 'invited' ? (
-                        <TextButton
-                          onClick={() => {
-                            setSelectedGame(game)
-                            void shareGame(game.id)
-                          }}
-                        >
-                          Share
-                        </TextButton>
+              <Grid>
+                {visibleGames.map((game) => (
+                  <Card key={game.id} $finished={game.status === 'finished'}>
+                    <CardHeader>
+                      <GameTitle>{game.title}</GameTitle>
+                      <StatusPill $status={game.status}>{statusLabel(game)}</StatusPill>
+                    </CardHeader>
+                    <Players>
+                      <PlayerAvatar $color={game.me.color}>{game.me.initial}</PlayerAvatar>
+                      {game.opponent ? (
+                        <>
+                          <AvatarWithOffset $color={game.opponent.color}>
+                            {game.opponent.initial}
+                          </AvatarWithOffset>
+                          <Versus>vs. {game.opponent.name}</Versus>
+                        </>
                       ) : (
-                        <TextButton onClick={() => openBoard(game)}>Open</TextButton>
+                        <Versus>Waiting for a friend</Versus>
                       )}
-                    </CardActions>
-                  </CardFooter>
-                </Card>
-              ))}
-            </Grid>
-          </>
+                    </Players>
+                    <MiniBoard>
+                      {game.board.map((mark, index) => (
+                        <MiniSquare key={index} data-mark={mark ?? ''}>
+                          {mark}
+                        </MiniSquare>
+                      ))}
+                    </MiniBoard>
+                    <CardFooter>
+                      <Updated>{game.updatedAt}</Updated>
+                      <CardActions>
+                        <IconButton
+                          aria-label={`Delete ${game.title}`}
+                          onClick={() => void deleteGame(game.id)}
+                        >
+                          ×
+                        </IconButton>
+                        {game.status === 'new' || game.status === 'invited' ? (
+                          <TextButton
+                            onClick={() => {
+                              setSelectedGame(game)
+                              void shareGame(game.id)
+                            }}
+                          >
+                            Share
+                          </TextButton>
+                        ) : (
+                          <TextButton onClick={() => openBoard(game)}>Open</TextButton>
+                        )}
+                      </CardActions>
+                    </CardFooter>
+                  </Card>
+                ))}
+              </Grid>
+            </>
+          )}
+          <div hidden={activeView !== 'worker-ping'}>{workerPingTest}</div>
+          <div hidden={activeView !== 'updates-test'}>{workerUpdatesTest}</div>
+          <div hidden={activeView !== 'notes'}>{notesView}</div>
+        </Main>
+
+        {createOpen && (
+          <Overlay
+            onMouseDown={(event) => event.target === event.currentTarget && setCreateOpen(false)}
+          >
+            <Modal>
+              <ModalHeader>
+                <ModalTitle>Create a new game</ModalTitle>
+                <IconButton aria-label='Close' onClick={() => setCreateOpen(false)}>
+                  ×
+                </IconButton>
+              </ModalHeader>
+              <Form onSubmit={(event) => void createGame(event)}>
+                <Label htmlFor='game-name'>Game name</Label>
+                <Input
+                  id='game-name'
+                  autoFocus
+                  value={gameName}
+                  onChange={(event) => setGameName(event.target.value)}
+                  placeholder='Sunday match'
+                />
+                <ModalActions>
+                  <SecondaryButton type='button' onClick={() => setCreateOpen(false)}>
+                    Cancel
+                  </SecondaryButton>
+                  <PrimaryButton type='submit'>
+                    <Plus>＋</Plus>
+                    <span>Create game</span>
+                  </PrimaryButton>
+                </ModalActions>
+              </Form>
+            </Modal>
+          </Overlay>
         )}
-        <div hidden={activeView !== 'worker-ping'}>{workerPingTest}</div>
-        <div hidden={activeView !== 'updates-test'}>{workerUpdatesTest}</div>
-        <div hidden={activeView !== 'notes'}>{notesView}</div>
-      </Main>
 
-      {createOpen && (
-        <Overlay
-          onMouseDown={(event) => event.target === event.currentTarget && setCreateOpen(false)}
-        >
-          <Modal>
-            <ModalHeader>
-              <ModalTitle>Create a new game</ModalTitle>
-              <IconButton aria-label='Close' onClick={() => setCreateOpen(false)}>
-                ×
-              </IconButton>
-            </ModalHeader>
-            <Form onSubmit={(event) => void createGame(event)}>
-              <Label htmlFor='game-name'>Game name</Label>
-              <Input
-                id='game-name'
-                autoFocus
-                value={gameName}
-                onChange={(event) => setGameName(event.target.value)}
-                placeholder='Sunday match'
-              />
-              <ModalActions>
-                <SecondaryButton type='button' onClick={() => setCreateOpen(false)}>
-                  Cancel
-                </SecondaryButton>
-                <PrimaryButton type='submit'>
-                  <Plus>＋</Plus>
-                  <span>Create game</span>
-                </PrimaryButton>
-              </ModalActions>
-            </Form>
-          </Modal>
-        </Overlay>
-      )}
+        {inviteOpen && selectedGame && (
+          <Overlay
+            onMouseDown={(event) => event.target === event.currentTarget && setInviteOpen(false)}
+          >
+            <Modal>
+              <ModalHeader>
+                <ModalTitle>Share {selectedGame.title}</ModalTitle>
+                <IconButton aria-label='Close' onClick={() => setInviteOpen(false)}>
+                  ×
+                </IconButton>
+              </ModalHeader>
+              <Form>
+                <Label htmlFor='game-share-payload'>
+                  Send this invite payload to your opponent
+                </Label>
+                <Textarea id='game-share-payload' readOnly value={invitePayload} />
+                <ModalActions>
+                  <SecondaryButton type='button' onClick={() => setInviteOpen(false)}>
+                    Close
+                  </SecondaryButton>
+                </ModalActions>
+              </Form>
+            </Modal>
+          </Overlay>
+        )}
 
-      {inviteOpen && selectedGame && (
-        <Overlay
-          onMouseDown={(event) => event.target === event.currentTarget && setInviteOpen(false)}
-        >
-          <Modal>
-            <ModalHeader>
-              <ModalTitle>Share {selectedGame.title}</ModalTitle>
-              <IconButton aria-label='Close' onClick={() => setInviteOpen(false)}>
-                ×
-              </IconButton>
-            </ModalHeader>
-            <Form>
-              <Label htmlFor='game-share-payload'>Send this invite payload to your opponent</Label>
-              <Textarea id='game-share-payload' readOnly value={invitePayload} />
-              <ModalActions>
-                <SecondaryButton type='button' onClick={() => setInviteOpen(false)}>
-                  Close
-                </SecondaryButton>
-              </ModalActions>
-            </Form>
-          </Modal>
-        </Overlay>
-      )}
+        {joinOpen && (
+          <Overlay
+            onMouseDown={(event) => event.target === event.currentTarget && setJoinOpen(false)}
+          >
+            <Modal>
+              <ModalHeader>
+                <ModalTitle>Join a game</ModalTitle>
+                <IconButton aria-label='Close' onClick={() => setJoinOpen(false)}>
+                  ×
+                </IconButton>
+              </ModalHeader>
+              <Form onSubmit={(event) => void joinGame(event)}>
+                <Label htmlFor='game-join-payload'>Game invite payload</Label>
+                <Textarea
+                  id='game-join-payload'
+                  autoFocus
+                  value={joinPayload}
+                  onChange={(event) => setJoinPayload(event.target.value)}
+                  placeholder='Paste the invite payload'
+                  required
+                />
+                <Label htmlFor='player-name'>Your name for this game</Label>
+                <Input
+                  id='player-name'
+                  value={playerName}
+                  onChange={(event) => setPlayerName(event.target.value)}
+                  placeholder='Alex Morgan'
+                  required
+                />
+                <ModalActions>
+                  <SecondaryButton type='button' onClick={() => setJoinOpen(false)}>
+                    Cancel
+                  </SecondaryButton>
+                  <PrimaryButton type='submit'>
+                    <span>Join game</span>
+                  </PrimaryButton>
+                </ModalActions>
+              </Form>
+            </Modal>
+          </Overlay>
+        )}
 
-      {joinOpen && (
-        <Overlay
-          onMouseDown={(event) => event.target === event.currentTarget && setJoinOpen(false)}
-        >
-          <Modal>
-            <ModalHeader>
-              <ModalTitle>Join a game</ModalTitle>
-              <IconButton aria-label='Close' onClick={() => setJoinOpen(false)}>
-                ×
-              </IconButton>
-            </ModalHeader>
-            <Form onSubmit={(event) => void joinGame(event)}>
-              <Label htmlFor='game-join-payload'>Game invite payload</Label>
-              <Textarea
-                id='game-join-payload'
-                autoFocus
-                value={joinPayload}
-                onChange={(event) => setJoinPayload(event.target.value)}
-                placeholder='Paste the invite payload'
-                required
-              />
-              <Label htmlFor='player-name'>Your name for this game</Label>
-              <Input
-                id='player-name'
-                value={playerName}
-                onChange={(event) => setPlayerName(event.target.value)}
-                placeholder='Alex Morgan'
-                required
-              />
-              <ModalActions>
-                <SecondaryButton type='button' onClick={() => setJoinOpen(false)}>
-                  Cancel
-                </SecondaryButton>
-                <PrimaryButton type='submit'>
-                  <span>Join game</span>
-                </PrimaryButton>
-              </ModalActions>
-            </Form>
-          </Modal>
-        </Overlay>
-      )}
-
-      {boardOpen && selectedGame && (
-        <Overlay
-          onMouseDown={(event) => event.target === event.currentTarget && setBoardOpen(false)}
-        >
-          <BoardModal>
-            <ModalHeader>
-              <div>
-                <ModalTitle>{selectedGame.title}</ModalTitle>
-                <BoardStatus>{statusLabel(selectedGame)}</BoardStatus>
-              </div>
-              <IconButton aria-label='Close' onClick={() => setBoardOpen(false)}>
-                ×
-              </IconButton>
-            </ModalHeader>
-            <LargeBoard>
-              {selectedGame.board.map((mark, index) => (
-                <LargeSquare
-                  key={index}
-                  data-mark={mark ?? ''}
-                  disabled={selectedGame.status !== 'my-turn' || mark !== null}
-                  onClick={() => void playMove(index)}
-                  aria-label={`Square ${index + 1}${mark ? `, ${mark}` : ''}`}
-                >
-                  {mark}
-                </LargeSquare>
-              ))}
-            </LargeBoard>
-          </BoardModal>
-        </Overlay>
-      )}
-    </Shell>
+        {boardOpen && selectedGame && (
+          <Overlay
+            onMouseDown={(event) => event.target === event.currentTarget && setBoardOpen(false)}
+          >
+            <BoardModal>
+              <ModalHeader>
+                <div>
+                  <ModalTitle>{selectedGame.title}</ModalTitle>
+                  <BoardStatus>{statusLabel(selectedGame)}</BoardStatus>
+                </div>
+                <IconButton aria-label='Close' onClick={() => setBoardOpen(false)}>
+                  ×
+                </IconButton>
+              </ModalHeader>
+              <LargeBoard>
+                {selectedGame.board.map((mark, index) => (
+                  <LargeSquare
+                    key={index}
+                    data-mark={mark ?? ''}
+                    disabled={selectedGame.status !== 'my-turn' || mark !== null}
+                    onClick={() => void playMove(index)}
+                    aria-label={`Square ${index + 1}${mark ? `, ${mark}` : ''}`}
+                  >
+                    {mark}
+                  </LargeSquare>
+                ))}
+              </LargeBoard>
+            </BoardModal>
+          </Overlay>
+        )}
+      </Shell>
+      <GameResultAnimation game={selectedGame} active={boardOpen} />
+    </>
   )
 }
 
