@@ -1,0 +1,14 @@
+{
+  "name": "@hello-pear/ui-tic-tac-toe",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.tsx"
+  },
+  "dependencies": {
+    "@hello-pear/tic-tac-toe-api": "0.0.1",
+    "react": "^19.3.1",
+    "styled-components": "^6.6.0"
+  }
+}
