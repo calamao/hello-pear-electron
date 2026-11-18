@@ -1,7 +1,7 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react'
 import styled, { css } from 'styled-components'
 import {
-  createInMemoryTicTacToeApi,
+  parseTicTacToeSharePayload,
   type GameStatus,
   type TicTacToeApi,
   type TicTacToeGame
@@ -213,6 +213,13 @@ const Header = styled.header`
   justify-content: space-between;
   gap: 20px;
   margin-bottom: 32px;
+`
+
+const HeaderActions = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
 `
 
 const Eyebrow = styled.p`
@@ -562,6 +569,26 @@ const Input = styled.input`
   }
 `
 
+const Textarea = styled.textarea`
+  width: 100%;
+  min-height: 120px;
+  box-sizing: border-box;
+  border: 1px solid #dcdad3;
+  border-radius: 12px;
+  background: #f7f6f2;
+  color: #20201d;
+  padding: 12px 14px;
+  font: inherit;
+  resize: vertical;
+  overflow-wrap: anywhere;
+
+  &:focus {
+    border-color: #7c5cff;
+    box-shadow: 0 0 0 3px rgba(124, 92, 255, 0.12);
+    outline: none;
+  }
+`
+
 const ModalActions = styled.div`
   display: flex;
   justify-content: flex-end;
@@ -628,6 +655,15 @@ const BoardStatus = styled.p`
   font-weight: 800;
 `
 
+const ErrorMessage = styled.p`
+  border: 1px solid #f1b6bd;
+  border-radius: 10px;
+  background: #fff0f1;
+  color: #9c2935;
+  padding: 10px 12px;
+  font-size: 13px;
+`
+
 function statusLabel(game: TicTacToeGame) {
   if (game.status === 'my-turn') return 'My turn'
   if (game.status === 'their-turn') return 'Their turn'
@@ -639,7 +675,7 @@ function statusLabel(game: TicTacToeGame) {
 }
 
 export interface TicTacToeAppProps {
-  api?: TicTacToeApi
+  api: TicTacToeApi
   activeView?: AppView
   onNavigate?: (view: AppView) => void
   workerPingTest?: ReactNode
@@ -655,18 +691,33 @@ export default function TicTacToeApp({
   workerUpdatesTest,
   notesView
 }: TicTacToeAppProps) {
-  const [gameApi] = useState<TicTacToeApi>(() => api ?? createInMemoryTicTacToeApi())
+  const [gameApi] = useState<TicTacToeApi>(() => api)
   const [games, setGames] = useState<TicTacToeGame[]>([])
   const [filter, setFilter] = useState<Filter>('all')
   const [createOpen, setCreateOpen] = useState(false)
   const [inviteOpen, setInviteOpen] = useState(false)
+  const [joinOpen, setJoinOpen] = useState(false)
   const [boardOpen, setBoardOpen] = useState(false)
   const [selectedGame, setSelectedGame] = useState<TicTacToeGame | null>(null)
   const [gameName, setGameName] = useState('')
-  const [friendName, setFriendName] = useState('')
+  const [invitePayload, setInvitePayload] = useState('')
+  const [joinPayload, setJoinPayload] = useState('')
+  const [playerName, setPlayerName] = useState('')
+  const [error, setError] = useState('')
 
   useEffect(() => {
-    void gameApi.list().then(setGames)
+    let active = true
+    void gameApi
+      .list()
+      .then((items) => {
+        if (active) setGames(items)
+      })
+      .catch((cause: unknown) => {
+        if (active) setError(`Could not load games: ${errorText(cause)}`)
+      })
+    return () => {
+      active = false
+    }
   }, [gameApi])
 
   const visibleGames = games.filter((game) => {
@@ -676,37 +727,69 @@ export default function TicTacToeApp({
   })
 
   async function refresh() {
-    setGames(await gameApi.list())
+    try {
+      setGames(await gameApi.list())
+      setError('')
+    } catch (cause) {
+      setError(`Could not load games: ${errorText(cause)}`)
+    }
   }
 
   async function createGame(event: FormEvent) {
     event.preventDefault()
-    await gameApi.create({ title: gameName })
-    setGameName('')
-    setCreateOpen(false)
-    await refresh()
+    try {
+      await gameApi.create({ title: gameName })
+      setGameName('')
+      setCreateOpen(false)
+      await refresh()
+    } catch (cause) {
+      setError(`Could not create game: ${errorText(cause)}`)
+    }
   }
 
   async function deleteGame(gameId: string) {
-    await gameApi.delete(gameId)
-    await refresh()
+    try {
+      await gameApi.delete(gameId)
+      await refresh()
+    } catch (cause) {
+      setError(`Could not delete game: ${errorText(cause)}`)
+    }
   }
 
-  async function inviteFriend(event: FormEvent) {
+  async function shareGame(gameId: string) {
+    try {
+      const payload = await gameApi.shareGame(gameId)
+      setInvitePayload(JSON.stringify(payload, null, 2))
+      setInviteOpen(true)
+      await refresh()
+    } catch (cause) {
+      setError(`Could not share game: ${errorText(cause)}`)
+    }
+  }
+
+  async function joinGame(event: FormEvent) {
     event.preventDefault()
-    if (!selectedGame) return
-    const updated = await gameApi.invite(selectedGame.id, friendName)
-    setSelectedGame(updated)
-    setFriendName('')
-    setInviteOpen(false)
-    await refresh()
+    try {
+      const payload = parseTicTacToeSharePayload(joinPayload)
+      await gameApi.joinGame(payload, playerName)
+      setJoinPayload('')
+      setPlayerName('')
+      setJoinOpen(false)
+      await refresh()
+    } catch (cause) {
+      setError(`Could not join game: ${errorText(cause)}`)
+    }
   }
 
   async function playMove(index: number) {
     if (!selectedGame) return
-    const updated = await gameApi.makeMove(selectedGame.id, index)
-    setSelectedGame(updated)
-    await refresh()
+    try {
+      const updated = await gameApi.makeMove(selectedGame.id, index)
+      setSelectedGame(updated)
+      await refresh()
+    } catch (cause) {
+      setError(`Could not make move: ${errorText(cause)}`)
+    }
   }
 
   function openBoard(game: TicTacToeGame) {
@@ -780,11 +863,16 @@ export default function TicTacToeApp({
                 <Eyebrow>Welcome back</Eyebrow>
                 <Title>My games</Title>
               </div>
-              <PrimaryButton onClick={() => setCreateOpen(true)}>
-                <Plus>＋</Plus>
-                <span>New game</span>
-              </PrimaryButton>
+              <HeaderActions>
+                <SecondaryButton onClick={() => setJoinOpen(true)}>Join game</SecondaryButton>
+                <PrimaryButton onClick={() => setCreateOpen(true)}>
+                  <Plus>＋</Plus>
+                  <span>New game</span>
+                </PrimaryButton>
+              </HeaderActions>
             </Header>
+
+            {error && <ErrorMessage role='alert'>{error}</ErrorMessage>}
 
             <Toolbar>
               <Tabs>
@@ -839,14 +927,14 @@ export default function TicTacToeApp({
                       >
                         ×
                       </IconButton>
-                      {game.status === 'new' ? (
+                      {game.status === 'new' || game.status === 'invited' ? (
                         <TextButton
                           onClick={() => {
                             setSelectedGame(game)
-                            setInviteOpen(true)
+                            void shareGame(game.id)
                           }}
                         >
-                          Invite
+                          Share
                         </TextButton>
                       ) : (
                         <TextButton onClick={() => openBoard(game)}>Open</TextButton>
@@ -903,27 +991,59 @@ export default function TicTacToeApp({
         >
           <Modal>
             <ModalHeader>
-              <ModalTitle>Invite a friend</ModalTitle>
+              <ModalTitle>Share {selectedGame.title}</ModalTitle>
               <IconButton aria-label='Close' onClick={() => setInviteOpen(false)}>
                 ×
               </IconButton>
             </ModalHeader>
-            <Form onSubmit={(event) => void inviteFriend(event)}>
-              <Label htmlFor='friend-name'>Friend's name</Label>
-              <Input
-                id='friend-name'
+            <Form>
+              <Label htmlFor='game-share-payload'>Send this invite payload to your opponent</Label>
+              <Textarea id='game-share-payload' readOnly value={invitePayload} />
+              <ModalActions>
+                <SecondaryButton type='button' onClick={() => setInviteOpen(false)}>
+                  Close
+                </SecondaryButton>
+              </ModalActions>
+            </Form>
+          </Modal>
+        </Overlay>
+      )}
+
+      {joinOpen && (
+        <Overlay
+          onMouseDown={(event) => event.target === event.currentTarget && setJoinOpen(false)}
+        >
+          <Modal>
+            <ModalHeader>
+              <ModalTitle>Join a game</ModalTitle>
+              <IconButton aria-label='Close' onClick={() => setJoinOpen(false)}>
+                ×
+              </IconButton>
+            </ModalHeader>
+            <Form onSubmit={(event) => void joinGame(event)}>
+              <Label htmlFor='game-join-payload'>Game invite payload</Label>
+              <Textarea
+                id='game-join-payload'
                 autoFocus
-                value={friendName}
-                onChange={(event) => setFriendName(event.target.value)}
+                value={joinPayload}
+                onChange={(event) => setJoinPayload(event.target.value)}
+                placeholder='Paste the invite payload'
+                required
+              />
+              <Label htmlFor='player-name'>Your name for this game</Label>
+              <Input
+                id='player-name'
+                value={playerName}
+                onChange={(event) => setPlayerName(event.target.value)}
                 placeholder='Alex Morgan'
                 required
               />
               <ModalActions>
-                <SecondaryButton type='button' onClick={() => setInviteOpen(false)}>
+                <SecondaryButton type='button' onClick={() => setJoinOpen(false)}>
                   Cancel
                 </SecondaryButton>
                 <PrimaryButton type='submit'>
-                  <span>Send invite</span>
+                  <span>Join game</span>
                 </PrimaryButton>
               </ModalActions>
             </Form>
@@ -965,4 +1085,6 @@ export default function TicTacToeApp({
   )
 }
 
-export { createInMemoryTicTacToeApi }
+function errorText(error: unknown) {
+  return error instanceof Error ? error.message : String(error)
+}

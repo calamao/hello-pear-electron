@@ -6,6 +6,7 @@ declare const Bare: {
 declare module 'autopass' {
   class Autopass {
     constructor(store: object)
+    static pair(store: object, invite: string): AutopassPairer
     ready(): Promise<void>
     close(): Promise<void>
     add(key: string, value: string): Promise<void>
@@ -13,6 +14,11 @@ declare module 'autopass' {
     list(): { toArray(): Promise<Array<{ key: string; value: string }>> }
     remove(key: string): Promise<void>
     createInvite(options: { readOnly: boolean }): Promise<string>
+  }
+
+  class AutopassPairer {
+    finished(): Promise<Autopass>
+    close(): Promise<void>
   }
 
   export = Autopass

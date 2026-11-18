@@ -11,9 +11,11 @@ import { helloWorld as helloWorldWorker } from '@hello-pear/worker-hello-world'
 import Autopass = require('autopass')
 import {
   createAutopassNotesApi,
+  createNotesErrorResponse,
   handleNotesRequest,
   isNotesRequest
 } from '@hello-pear/worker-notes'
+import type { NotesRequest, NotesResponse } from '@hello-pear/shared-types'
 
 type FrameData = { toString(): string }
 
@@ -30,11 +32,15 @@ const updaterConfig = {
 
 const pipe = new FramedStream(Bare.IPC)
 const store = new Corestore(path.join(updaterConfig.dir, 'pear-runtime', 'corestore'))
-const notesStore = new Corestore(path.join(updaterConfig.dir, 'app-storage', 'notes'))
 const swarm = new Hyperswarm()
 const pear = new PearRuntime({ ...updaterConfig, swarm, store })
-const notesPass = new Autopass(notesStore)
-const notesApi = createAutopassNotesApi(notesPass)
+const notesVaults = new Map<string, Promise<NotesVault>>()
+
+interface NotesVault {
+  store: Corestore
+  pass: Autopass
+  api: ReturnType<typeof createAutopassNotesApi>
+}
 
 pear.updater.on('error', (err) => pipe.write('updater-error ' + err.message))
 
@@ -52,8 +58,11 @@ pear.updater.on('updated', () => pipe.write('updated'))
 pear.on('minver-required', () => pipe.write('minver-required'))
 
 goodbye(async () => {
-  await notesPass.close()
-  await notesStore.close()
+  for (const opening of notesVaults.values()) {
+    const vault = await opening
+    await vault.pass.close()
+    await vault.store.close()
+  }
   await swarm.destroy()
   await pear.close()
   await store.close()
@@ -63,6 +72,83 @@ function isPing(message: unknown): message is { type: 'ping' } {
   return (
     typeof message === 'object' && message !== null && 'type' in message && message.type === 'ping'
   )
+}
+
+function notesVaultPath(vaultId: string) {
+  if (!/^[a-zA-Z0-9][a-zA-Z0-9_-]{0,80}$/.test(vaultId)) {
+    throw new Error('Invalid notes vault ID')
+  }
+  if (vaultId === 'notes') {
+    return path.join(updaterConfig.dir, 'app-storage', 'notes')
+  }
+  return path.join(updaterConfig.dir, 'app-storage', 'notes-vaults', vaultId)
+}
+
+async function openNotesVault(vaultId: string): Promise<NotesVault> {
+  const vaultStore = new Corestore(notesVaultPath(vaultId))
+  const pass = new Autopass(vaultStore)
+  try {
+    await pass.ready()
+    return { store: vaultStore, pass, api: createAutopassNotesApi(pass) }
+  } catch (error) {
+    await pass.close()
+    await vaultStore.close()
+    throw error
+  }
+}
+
+async function getNotesVault(vaultId: string): Promise<NotesVault> {
+  const existing = notesVaults.get(vaultId)
+  if (existing) return existing
+
+  const opening = openNotesVault(vaultId)
+  notesVaults.set(vaultId, opening)
+  try {
+    return await opening
+  } catch (error) {
+    if (notesVaults.get(vaultId) === opening) notesVaults.delete(vaultId)
+    throw error
+  }
+}
+
+async function joinNotesVault(vaultId: string, invite: string): Promise<void> {
+  if (vaultId === 'notes') {
+    throw new Error('Cannot join an invite into the default notes vault')
+  }
+  if (notesVaults.has(vaultId)) {
+    throw new Error('Notes vault already exists')
+  }
+
+  const vaultStore = new Corestore(notesVaultPath(vaultId))
+  const pairing = Autopass.pair(vaultStore, invite)
+  const opening = (async (): Promise<NotesVault> => {
+    try {
+      const pass = await pairing.finished()
+      await pass.ready()
+      return { store: vaultStore, pass, api: createAutopassNotesApi(pass) }
+    } catch (error) {
+      await pairing.close()
+      await vaultStore.close()
+      throw error
+    }
+  })()
+  notesVaults.set(vaultId, opening)
+  try {
+    await opening
+  } catch (error) {
+    if (notesVaults.get(vaultId) === opening) notesVaults.delete(vaultId)
+    throw error
+  }
+}
+
+async function handleNotesIPC(request: NotesRequest): Promise<NotesResponse> {
+  if (request.type === 'notes:join') {
+    await joinNotesVault(request.vaultId, request.invite)
+    return { type: 'notes:joined', requestId: request.requestId, vaultId: request.vaultId }
+  }
+
+  const vault = await getNotesVault(request.vaultId)
+  return handleNotesRequest(vault.api, request, vault.pass.ready())
 }
 
 pipe.on('data', async (data: FrameData) => {
@@ -94,7 +180,10 @@ pipe.on('data', async (data: FrameData) => {
     return
   }
   if (isNotesRequest(parsed)) {
-    pipe.write(JSON.stringify(await handleNotesRequest(notesApi, parsed, notesPass.ready())))
+    const response = await handleNotesIPC(parsed).catch((error: unknown) =>
+      createNotesErrorResponse(parsed, error)
+    )
+    pipe.write(JSON.stringify(response))
     return
   }
   pipe.write('unknown-message ' + message)

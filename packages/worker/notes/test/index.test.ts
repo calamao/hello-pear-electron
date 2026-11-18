@@ -31,19 +31,20 @@ function createPass(): AutopassNotesPass {
 
 it('creates, lists, and deletes notes through the Autopass API', async () => {
   const api = createAutopassNotesApi(createPass())
-  const created = await api.create({ title: '  Shopping  ', content: 'Milk' })
+  const created = await api.create({ title: '  Shopping  ', content: 'Milk' }, 'game-123')
 
   expect(created.title).toBe('Shopping')
+  expect(created.id).toBe('game-123')
   expect(await api.list()).toEqual([created])
   await api.delete(created.id)
   expect(await api.list()).toEqual([])
 })
 
-it('shares a note using a read-only Autopass invite', async () => {
+it('shares a note using a writable Autopass invite', async () => {
   const api = createAutopassNotesApi(createPass())
   const note = await api.create({ title: 'Shared', content: 'Hello' })
 
-  expect(await api.share(note.id)).toEqual({ note, invite: 'readonly-invite' })
+  expect(await api.share(note.id)).toEqual({ note, invite: 'writable-invite' })
 })
 
 it('returns request errors as typed worker events', async () => {

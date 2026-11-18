@@ -38,15 +38,19 @@ export function createAutopassNotesApi(pass: AutopassNotesPass): NotesApi {
   }
 
   return {
-    async create(input: CreateNoteInput) {
+    async create(input: CreateNoteInput, noteId) {
       const title = input.title.trim()
       if (!title) {
         throw new Error('A note title is required')
       }
 
+      const id = noteId ?? `note-${Date.now().toString(36)}-${nextId++}`
+      if ((await pass.get(noteKey(id))) !== null) {
+        throw new Error('Note already exists')
+      }
       const now = new Date().toISOString()
       const note: Note = {
-        id: `note-${Date.now().toString(36)}-${nextId++}`,
+        id,
         title,
         content: input.content,
         createdAt: now,
@@ -54,6 +58,21 @@ export function createAutopassNotesApi(pass: AutopassNotesPass): NotesApi {
       }
       await pass.add(noteKey(note.id), JSON.stringify(note))
       return { ...note }
+    },
+    async update(noteId, input) {
+      const title = input.title.trim()
+      if (!title) {
+        throw new Error('A note title is required')
+      }
+      const current = await getNote(noteId)
+      const note: Note = {
+        ...current,
+        title,
+        content: input.content,
+        updatedAt: new Date().toISOString()
+      }
+      await pass.add(noteKey(noteId), JSON.stringify(note))
+      return note
     },
     async list() {
       const records = await pass.list().toArray()
@@ -89,7 +108,9 @@ export function isNotesRequest(value: unknown): value is NotesRequest {
     value === null ||
     !('type' in value) ||
     !('requestId' in value) ||
-    typeof value.requestId !== 'string'
+    typeof value.requestId !== 'string' ||
+    !('vaultId' in value) ||
+    typeof value.vaultId !== 'string'
   ) {
     return false
   }
@@ -111,14 +132,48 @@ export function isNotesRequest(value: unknown): value is NotesRequest {
     case 'notes:delete':
     case 'notes:share':
       return 'noteId' in value && typeof value.noteId === 'string'
+    case 'notes:update':
+      return (
+        'noteId' in value &&
+        typeof value.noteId === 'string' &&
+        'input' in value &&
+        typeof value.input === 'object' &&
+        value.input !== null &&
+        'title' in value.input &&
+        typeof value.input.title === 'string' &&
+        'content' in value.input &&
+        typeof value.input.content === 'string'
+      )
+    case 'notes:join':
+      return 'invite' in value && typeof value.invite === 'string'
     default:
       return false
   }
 }
 
+export type NotesDataRequest = Exclude<NotesRequest, { type: 'notes:join' }>
+
+export function createNotesErrorResponse(request: NotesRequest, error: unknown): NotesResponse {
+  const operations: Record<NotesRequest['type'], NotesOperation> = {
+    'notes:create': 'create',
+    'notes:list': 'list',
+    'notes:get': 'get',
+    'notes:update': 'update',
+    'notes:delete': 'delete',
+    'notes:share': 'share',
+    'notes:join': 'join'
+  }
+  return {
+    type: 'notes:error',
+    requestId: request.requestId,
+    operation: operations[request.type],
+    error: error instanceof Error ? error.message : String(error)
+  }
+}
+
 export async function handleNotesRequest(
   api: NotesApi,
-  request: NotesRequest,
+  request: NotesDataRequest,
   ready?: Promise<void>
 ): Promise<NotesResponse> {
   try {
@@ -131,7 +186,7 @@ export async function handleNotesRequest(
         return {
           type: 'notes:created',
           requestId: request.requestId,
-          note: await api.create(request.input)
+          note: await api.create(request.input, request.noteId)
         }
       case 'notes:list':
         return {
@@ -145,6 +200,12 @@ export async function handleNotesRequest(
           requestId: request.requestId,
           note: await api.get(request.noteId)
         }
+      case 'notes:update':
+        return {
+          type: 'notes:updated',
+          requestId: request.requestId,
+          note: await api.update(request.noteId, request.input)
+        }
       case 'notes:delete':
         await api.delete(request.noteId)
         return { type: 'notes:deleted', requestId: request.requestId, noteId: request.noteId }
@@ -156,19 +217,6 @@ export async function handleNotesRequest(
         }
     }
   } catch (error) {
-    const operations: Record<NotesRequest['type'], NotesOperation> = {
-      'notes:create': 'create',
-      'notes:list': 'list',
-      'notes:get': 'get',
-      'notes:delete': 'delete',
-      'notes:share': 'share'
-    }
-    const operation = operations[request.type]
-    return {
-      type: 'notes:error',
-      requestId: request.requestId,
-      operation,
-      error: error instanceof Error ? error.message : String(error)
-    }
+    return createNotesErrorResponse(request, error)
   }
 }

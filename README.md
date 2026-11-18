@@ -18,6 +18,7 @@ End-to-end boilerplate for embedding [pear-runtime][pear-runtime] into [Electron
 - [Development](#development)
   - [Install](#install)
   - [Start](#start)
+  - [Playing with two development instances](#playing-with-two-development-instances)
 - [Architecture](#architecture)
   - [Updates](#updates)
   - [Storage](#storage)
@@ -95,6 +96,24 @@ To enable updates for testing update flow in local development use
 ```sh
 npm start -- --updates
 ```
+
+### Playing with two development instances <a name="playing-with-two-development-instances"></a>
+
+Open two terminals in the repository. Give each app instance its own storage directory:
+
+```sh
+npm start -- --storage /tmp/pear-ttt-player-a --no-updates
+```
+
+```sh
+npm start -- --storage /tmp/pear-ttt-player-b --no-updates
+```
+
+In the first instance, create a game and choose **Share**. Copy the invite payload, then
+choose **Join game** in the second instance, paste the payload, and enter the name to use
+for that game. The second instance should then list the shared game. Keep both instances
+open while they pair and sync. If a board doesn't show a move made by the other instance,
+reload the stale window to fetch the latest game state.
 
 ## Architecture
 

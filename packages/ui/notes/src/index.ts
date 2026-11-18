@@ -16,11 +16,18 @@ export interface NotesWorkerBridge {
 export interface NotesClient {
   start(): Promise<void>
   listNotes(): Promise<Note[]>
-  createNote(input: CreateNoteInput): Promise<Note>
+  createNote(input: CreateNoteInput, noteId?: string): Promise<Note>
   getNote(noteId: string): Promise<Note>
+  updateNote(noteId: string, input: CreateNoteInput): Promise<Note>
   deleteNote(noteId: string): Promise<void>
   shareNote(noteId: string): Promise<NotesShareResult>
+  joinVault(invite: string): Promise<void>
   close(): void
+}
+
+export interface NotesClientOptions {
+  vaultId?: string
+  workerSpecifier?: string
 }
 
 interface PendingRequest {
@@ -33,8 +40,10 @@ const decoder = new TextDecoder('utf-8')
 
 export function createNotesClient(
   bridge: NotesWorkerBridge,
-  workerSpecifier = mainWorker
+  options: NotesClientOptions = {}
 ): NotesClient {
+  const vaultId = options.vaultId ?? 'notes'
+  const workerSpecifier = options.workerSpecifier ?? mainWorker
   const pending = new Map<string, PendingRequest>()
   const clientId = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`
   let nextRequestId = 0
@@ -89,7 +98,7 @@ export function createNotesClient(
       () =>
         new Promise((resolve, reject) => {
           const requestId = `${clientId}-${++nextRequestId}`
-          const message: NotesRequest = { ...command, requestId }
+          const message: NotesRequest = { ...command, requestId, vaultId }
           pending.set(requestId, { resolve, reject })
 
           void bridge
@@ -127,14 +136,19 @@ export function createNotesClient(
       assertResponse(response, 'notes:list:result')
       return response.notes
     },
-    async createNote(input) {
-      const response = await request({ type: 'notes:create', input })
+    async createNote(input, noteId) {
+      const response = await request({ type: 'notes:create', input, noteId })
       assertResponse(response, 'notes:created')
       return response.note
     },
     async getNote(noteId) {
       const response = await request({ type: 'notes:get', noteId })
       assertResponse(response, 'notes:got')
+      return response.note
+    },
+    async updateNote(noteId, input) {
+      const response = await request({ type: 'notes:update', noteId, input })
+      assertResponse(response, 'notes:updated')
       return response.note
     },
     async deleteNote(noteId) {
@@ -145,6 +159,10 @@ export function createNotesClient(
       const response = await request({ type: 'notes:share', noteId })
       assertResponse(response, 'notes:shared')
       return { note: response.note, invite: response.invite }
+    },
+    async joinVault(invite) {
+      const response = await request({ type: 'notes:join', invite })
+      assertResponse(response, 'notes:joined')
     },
     close() {
       if (closed) return
@@ -173,6 +191,7 @@ function isNotesResponse(value: unknown): value is NotesResponse {
   switch (value.type) {
     case 'notes:created':
     case 'notes:got':
+    case 'notes:updated':
       return 'note' in value && isNote(value.note)
     case 'notes:shared':
       return (
@@ -185,6 +204,8 @@ function isNotesResponse(value: unknown): value is NotesResponse {
       return 'notes' in value && Array.isArray(value.notes) && value.notes.every(isNote)
     case 'notes:deleted':
       return 'noteId' in value && typeof value.noteId === 'string'
+    case 'notes:joined':
+      return 'vaultId' in value && typeof value.vaultId === 'string'
     case 'notes:error':
       return (
         'error' in value &&
@@ -193,8 +214,10 @@ function isNotesResponse(value: unknown): value is NotesResponse {
         (value.operation === 'create' ||
           value.operation === 'list' ||
           value.operation === 'get' ||
+          value.operation === 'update' ||
           value.operation === 'delete' ||
-          value.operation === 'share')
+          value.operation === 'share' ||
+          value.operation === 'join')
       )
     default:
       return false

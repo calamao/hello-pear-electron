@@ -1,228 +1,457 @@
-export type PlayerMark = 'X' | 'O'
+import type { Note } from '@hello-pear/shared-types'
+import type { NotesClient } from '@hello-pear/ui-notes'
+import type {
+  CreateGameInput,
+  GameCatalogEntry,
+  Player,
+  PlayerMark,
+  TicTacToeApi,
+  TicTacToeGame,
+  TicTacToeGameRecord,
+  TicTacToeSharePayload
+} from './types'
 
-export type GameStatus = 'new' | 'invited' | 'my-turn' | 'their-turn' | 'finished'
+export type {
+  CreateGameInput,
+  GameCatalogEntry,
+  GameStatus,
+  Player,
+  PlayerMark,
+  TicTacToeApi,
+  TicTacToeGame,
+  TicTacToeGameRecord,
+  TicTacToeSharePayload
+} from './types'
 
-export interface Player {
-  id: string
-  name: string
-  initial: string
-  color: string
-  mark?: PlayerMark
+export interface GameCatalog {
+  list(): GameCatalogEntry[]
+  get(gameId: string): GameCatalogEntry | null
+  add(entry: GameCatalogEntry): void
+  remove(gameId: string): void
+  getLocalPlayer(): Player
+  setLocalPlayerName(name: string): Player
 }
 
-export interface TicTacToeGame {
-  id: string
-  title: string
-  status: GameStatus
-  board: Array<PlayerMark | null>
-  me: Player
-  opponent: Player | null
-  winner: PlayerMark | null
-  isDraw: boolean
-  updatedAt: string
+interface CatalogStorage {
+  getItem(key: string): string | null
+  setItem(key: string, value: string): void
 }
 
-export interface CreateGameInput {
-  title?: string
-  opponentId?: string
+interface CatalogData {
+  playerId: string
+  playerName: string
+  games: GameCatalogEntry[]
 }
 
-export interface TicTacToeApi {
-  list: () => Promise<TicTacToeGame[]>
-  create: (input?: CreateGameInput) => Promise<TicTacToeGame>
-  delete: (gameId: string) => Promise<void>
-  invite: (gameId: string, friendName: string) => Promise<TicTacToeGame>
-  makeMove: (gameId: string, index: number) => Promise<TicTacToeGame>
-}
-
-const me: Player = {
-  id: 'me',
-  name: 'You',
-  initial: 'YO',
-  color: '#7c5cff',
-  mark: 'X'
-}
-
-const friends: Player[] = [
-  { id: 'maya', name: 'Maya Chen', initial: 'MC', color: '#ff7a90' },
-  { id: 'leo', name: 'Leo Martins', initial: 'LM', color: '#35b6a4' },
-  { id: 'ava', name: 'Ava Singh', initial: 'AS', color: '#f2ad50' }
+const catalogKey = 'hello-pear.tic-tac-toe.catalog'
+const winningLines = [
+  [0, 1, 2],
+  [3, 4, 5],
+  [6, 7, 8],
+  [0, 3, 6],
+  [1, 4, 7],
+  [2, 5, 8],
+  [0, 4, 8],
+  [2, 4, 6]
 ]
 
-const initialGames: TicTacToeGame[] = [
-  {
-    id: 'game-1',
-    title: 'Sunday match',
-    status: 'my-turn',
-    board: ['X', null, 'O', null, 'X', null, null, null, null],
-    me,
-    opponent: { ...friends[0], mark: 'O' },
-    winner: null,
-    isDraw: false,
-    updatedAt: 'Just now'
-  },
-  {
-    id: 'game-2',
-    title: 'Coffee break',
-    status: 'their-turn',
-    board: ['X', 'O', null, null, 'X', null, null, null, null],
-    me,
-    opponent: { ...friends[1], mark: 'O' },
-    winner: null,
-    isDraw: false,
-    updatedAt: '12 min ago'
-  },
-  {
-    id: 'game-3',
-    title: 'Quick rematch',
-    status: 'invited',
-    board: Array<PlayerMark | null>(9).fill(null),
-    me,
-    opponent: { ...friends[2], mark: 'O' },
-    winner: null,
-    isDraw: false,
-    updatedAt: '1 hr ago'
-  },
-  {
-    id: 'game-4',
-    title: 'Morning game',
-    status: 'finished',
-    board: ['X', 'O', 'X', 'X', 'O', null, 'X', null, 'O'],
-    me,
-    opponent: { ...friends[0], mark: 'O' },
-    winner: 'X',
-    isDraw: false,
-    updatedAt: 'Yesterday'
-  },
-  {
-    id: 'game-5',
-    title: 'Open challenge',
-    status: 'new',
-    board: Array<PlayerMark | null>(9).fill(null),
-    me,
-    opponent: null,
-    winner: null,
-    isDraw: false,
-    updatedAt: 'Yesterday'
-  },
-  {
-    id: 'game-6',
-    title: 'Evening draw',
-    status: 'finished',
-    board: ['X', 'O', 'X', 'X', 'O', 'O', 'O', 'X', 'X'],
-    me,
-    opponent: { ...friends[1], mark: 'O' },
-    winner: null,
-    isDraw: true,
-    updatedAt: '2 days ago'
+export function createLocalGameCatalog(storage?: CatalogStorage): GameCatalog {
+  const persistence = storage ?? globalThis.localStorage
+  if (!persistence) throw new Error('Persistent local storage is unavailable')
+
+  function read(): CatalogData {
+    const stored = persistence.getItem(catalogKey)
+    if (stored === null) {
+      const initial: CatalogData = {
+        playerId: `player-${crypto.randomUUID()}`,
+        playerName: 'You',
+        games: []
+      }
+      write(initial)
+      return initial
+    }
+
+    let parsed: unknown
+    try {
+      parsed = JSON.parse(stored) as unknown
+    } catch (error) {
+      throw new Error(
+        `Could not parse the local game catalog: ${error instanceof Error ? error.message : String(error)}`
+      )
+    }
+    if (!isCatalogData(parsed)) throw new Error('The local game catalog has an invalid shape')
+    return parsed
   }
-]
 
-function cloneGame(game: TicTacToeGame): TicTacToeGame {
+  function write(data: CatalogData) {
+    persistence.setItem(catalogKey, JSON.stringify(data))
+  }
+
   return {
-    ...game,
-    board: [...game.board],
-    me: { ...game.me },
-    opponent: game.opponent ? { ...game.opponent } : null
+    list() {
+      return read().games.map((entry) => ({ ...entry }))
+    },
+    get(gameId) {
+      const entry = read().games.find((item) => item.gameId === gameId)
+      return entry ? { ...entry } : null
+    },
+    add(entry) {
+      const data = read()
+      const games = data.games.filter((item) => item.gameId !== entry.gameId)
+      games.push({ ...entry })
+      write({ ...data, games })
+    },
+    remove(gameId) {
+      const data = read()
+      write({ ...data, games: data.games.filter((item) => item.gameId !== gameId) })
+    },
+    getLocalPlayer() {
+      const data = read()
+      return createPlayer(data.playerId, data.playerName)
+    },
+    setLocalPlayerName(name) {
+      const playerName = name.trim()
+      if (!playerName) throw new Error('A player name is required')
+      const data = read()
+      write({ ...data, playerName })
+      return createPlayer(data.playerId, playerName)
+    }
   }
 }
 
-function findWinner(board: Array<PlayerMark | null>): PlayerMark | null {
-  const lines = [
-    [0, 1, 2],
-    [3, 4, 5],
-    [6, 7, 8],
-    [0, 3, 6],
-    [1, 4, 7],
-    [2, 5, 8],
-    [0, 4, 8],
-    [2, 4, 6]
-  ]
-
-  for (const [a, b, c] of lines) {
-    if (board[a] && board[a] === board[b] && board[a] === board[c]) return board[a]
+export function createTicTacToeApi(
+  createNotesClient: (vaultId: string) => NotesClient,
+  catalog: GameCatalog
+): TicTacToeApi {
+  async function getRecord(gameId: string) {
+    const entry = catalog.get(gameId)
+    if (!entry) throw new Error('Game not found')
+    const client = createNotesClient(gameId)
+    try {
+      const note = await client.getNote(entry.noteId)
+      return { entry, note, record: parseGameRecord(note, gameId) }
+    } finally {
+      client.close()
+    }
   }
 
-  return null
-}
-
-export function createInMemoryTicTacToeApi(): TicTacToeApi {
-  const games = initialGames.map(cloneGame)
-  let nextId = 7
+  async function saveRecord(client: NotesClient, noteId: string, record: TicTacToeGameRecord) {
+    return client.updateNote(noteId, {
+      title: record.title,
+      content: JSON.stringify(record)
+    })
+  }
 
   return {
     async list() {
-      return games.map(cloneGame)
+      const games = await Promise.all(
+        catalog.list().map(async ({ gameId, noteId }) => {
+          const client = createNotesClient(gameId)
+          try {
+            const note = await client.getNote(noteId)
+            const record = parseGameRecord(note, gameId)
+            return projectGame(record, catalog.getLocalPlayer().id)
+          } finally {
+            client.close()
+          }
+        })
+      )
+      return games
     },
-    async create(input = {}) {
-      const friend = friends[(nextId - 7) % friends.length]
-      const opponent = input.opponentId
-        ? (friends.find((item) => item.id === input.opponentId) ?? friend)
-        : null
-      const game: TicTacToeGame = {
-        id: `game-${nextId++}`,
-        title: input.title?.trim() || `New match ${nextId - 1}`,
-        status: opponent ? 'invited' : 'new',
+    async create(input: CreateGameInput = {}) {
+      const gameId = `game-${crypto.randomUUID()}`
+      const title = input.title?.trim() || 'New match'
+      const player = catalog.getLocalPlayer()
+      const record: TicTacToeGameRecord = {
+        version: 1,
+        id: gameId,
+        title,
         board: Array<PlayerMark | null>(9).fill(null),
-        me,
-        opponent: opponent ? { ...opponent, mark: 'O' } : null,
+        players: { X: { ...player, mark: 'X' }, O: null },
+        currentTurn: 'X',
         winner: null,
         isDraw: false,
-        updatedAt: 'Just now'
+        invitePending: false,
+        updatedAt: new Date().toISOString()
       }
-      games.unshift(game)
-      return cloneGame(game)
-    },
-    async delete(gameId) {
-      const index = games.findIndex((game) => game.id === gameId)
-      if (index !== -1) games.splice(index, 1)
-    },
-    async invite(gameId, friendName) {
-      const game = games.find((item) => item.id === gameId)
-      if (!game) throw new Error('Game not found')
-
-      const opponent: Player = {
-        id: `friend-${friendName.toLowerCase().replaceAll(' ', '-')}`,
-        name: friendName.trim() || 'New friend',
-        initial:
-          friendName
-            .trim()
-            .split(/\s+/)
-            .map((part) => part[0])
-            .join('')
-            .slice(0, 2)
-            .toUpperCase() || 'NF',
-        color: '#35b6a4',
-        mark: 'O'
+      const client = createNotesClient(gameId)
+      try {
+        const note = await client.createNote({ title, content: JSON.stringify(record) }, gameId)
+        catalog.add({ gameId, noteId: note.id })
+        return projectGame(record, player.id)
+      } finally {
+        client.close()
       }
-      game.opponent = opponent
-      game.status = 'invited'
-      game.updatedAt = 'Just now'
-      return cloneGame(game)
     },
-    async makeMove(gameId, index) {
-      const game = games.find((item) => item.id === gameId)
-      if (!game) throw new Error('Game not found')
-      if (game.status === 'finished') throw new Error('This game is already finished')
-      if (game.status === 'their-turn') throw new Error("It's not your turn")
-      if (index < 0 || index > 8 || game.board[index]) throw new Error('That square is unavailable')
-
-      game.board[index] = 'X'
-      game.winner = findWinner(game.board)
-      game.isDraw = !game.winner && game.board.every(Boolean)
-
-      if (game.winner || game.isDraw) {
-        game.status = 'finished'
-      } else {
-        const move = game.board.findIndex((square) => square === null)
-        if (move !== -1) game.board[move] = 'O'
-        game.winner = findWinner(game.board)
-        game.isDraw = !game.winner && game.board.every(Boolean)
-        game.status = game.winner || game.isDraw ? 'finished' : 'my-turn'
+    async delete(gameId: string) {
+      const entry = catalog.get(gameId)
+      if (!entry) throw new Error('Game not found')
+      const client = createNotesClient(gameId)
+      try {
+        await client.deleteNote(entry.noteId)
+        catalog.remove(gameId)
+      } finally {
+        client.close()
+      }
+    },
+    async makeMove(gameId: string, index: number) {
+      const { entry, record } = await getRecord(gameId)
+      if (record.winner || record.isDraw) throw new Error('This game is already finished')
+      if (index < 0 || index > 8 || record.board[index] !== null) {
+        throw new Error('That square is unavailable')
       }
 
-      game.updatedAt = 'Just now'
-      return cloneGame(game)
+      const playerMark = markForPlayer(record, catalog.getLocalPlayer().id)
+      if (!playerMark || record.currentTurn !== playerMark) {
+        throw new Error("It's not your turn")
+      }
+
+      record.board[index] = playerMark
+      record.winner = findWinner(record.board)
+      record.isDraw = !record.winner && record.board.every(Boolean)
+      record.currentTurn = record.winner || record.isDraw ? null : playerMark === 'X' ? 'O' : 'X'
+      record.updatedAt = new Date().toISOString()
+
+      const client = createNotesClient(gameId)
+      try {
+        await saveRecord(client, entry.noteId, record)
+      } finally {
+        client.close()
+      }
+      return projectGame(record, catalog.getLocalPlayer().id)
+    },
+    async shareGame(gameId) {
+      const { entry, record } = await getRecord(gameId)
+      const client = createNotesClient(gameId)
+      try {
+        const shared = await client.shareNote(entry.noteId)
+        record.invitePending = true
+        record.updatedAt = new Date().toISOString()
+        await saveRecord(client, entry.noteId, record)
+        return {
+          version: 1,
+          gameId,
+          noteId: shared.note.id,
+          invite: shared.invite
+        }
+      } finally {
+        client.close()
+      }
+    },
+    async joinGame(payload, playerName) {
+      if (!isTicTacToeSharePayload(payload)) throw new Error('Invalid game invite')
+      if (catalog.get(payload.gameId)) throw new Error('This game is already in your catalog')
+
+      const client = createNotesClient(payload.gameId)
+      try {
+        await client.joinVault(payload.invite)
+        const note = await client.getNote(payload.noteId)
+        const record = parseGameRecord(note, payload.gameId)
+        const currentPlayer = catalog.getLocalPlayer()
+
+        if (record.players.X.id === currentPlayer.id) {
+          throw new Error('You cannot join a game you created')
+        }
+        if (record.players.O && record.players.O.id !== currentPlayer.id) {
+          throw new Error('This game already has an opponent')
+        }
+
+        const player = catalog.setLocalPlayerName(playerName)
+        record.players.O = { ...player, mark: 'O' }
+        record.invitePending = false
+        record.updatedAt = new Date().toISOString()
+        await saveRecord(client, note.id, record)
+        catalog.add({ gameId: payload.gameId, noteId: note.id })
+        return projectGame(record, player.id)
+      } finally {
+        client.close()
+      }
     }
+  }
+}
+
+export function parseTicTacToeSharePayload(value: string): TicTacToeSharePayload {
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(value) as unknown
+  } catch (error) {
+    throw new Error(
+      `Invalid game invite: ${error instanceof Error ? error.message : String(error)}`
+    )
+  }
+  if (!isTicTacToeSharePayload(parsed)) throw new Error('Invalid game invite')
+  return parsed
+}
+
+function isTicTacToeSharePayload(value: unknown): value is TicTacToeSharePayload {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'version' in value &&
+    value.version === 1 &&
+    'gameId' in value &&
+    typeof value.gameId === 'string' &&
+    /^[a-zA-Z0-9][a-zA-Z0-9_-]{0,80}$/.test(value.gameId) &&
+    'noteId' in value &&
+    typeof value.noteId === 'string' &&
+    'invite' in value &&
+    typeof value.invite === 'string' &&
+    value.invite.length > 0
+  )
+}
+
+function isCatalogData(value: unknown): value is CatalogData {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'playerId' in value &&
+    typeof value.playerId === 'string' &&
+    'playerName' in value &&
+    typeof value.playerName === 'string' &&
+    'games' in value &&
+    Array.isArray(value.games) &&
+    value.games.every(
+      (entry) =>
+        typeof entry === 'object' &&
+        entry !== null &&
+        'gameId' in entry &&
+        typeof entry.gameId === 'string' &&
+        'noteId' in entry &&
+        typeof entry.noteId === 'string'
+    )
+  )
+}
+
+function parseGameRecord(note: Note, gameId: string): TicTacToeGameRecord {
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(note.content) as unknown
+  } catch (error) {
+    throw new Error(
+      `Game note is not valid JSON: ${error instanceof Error ? error.message : String(error)}`
+    )
+  }
+  if (!isTicTacToeGameRecord(parsed) || parsed.id !== gameId || note.id !== gameId) {
+    throw new Error('Game note does not match its catalog entry')
+  }
+  return parsed
+}
+
+function isTicTacToeGameRecord(value: unknown): value is TicTacToeGameRecord {
+  if (typeof value !== 'object' || value === null) return false
+  if (
+    !('version' in value) ||
+    value.version !== 1 ||
+    !('id' in value) ||
+    typeof value.id !== 'string' ||
+    !('title' in value) ||
+    typeof value.title !== 'string' ||
+    !('board' in value) ||
+    !Array.isArray(value.board) ||
+    value.board.length !== 9 ||
+    !value.board.every((mark) => mark === null || mark === 'X' || mark === 'O') ||
+    !('players' in value) ||
+    typeof value.players !== 'object' ||
+    value.players === null ||
+    !('X' in value.players) ||
+    !isPlayer(value.players.X) ||
+    !('O' in value.players) ||
+    (value.players.O !== null && !isPlayer(value.players.O)) ||
+    !('currentTurn' in value) ||
+    (value.currentTurn !== null && value.currentTurn !== 'X' && value.currentTurn !== 'O') ||
+    !('winner' in value) ||
+    (value.winner !== null && value.winner !== 'X' && value.winner !== 'O') ||
+    !('isDraw' in value) ||
+    typeof value.isDraw !== 'boolean' ||
+    !('invitePending' in value) ||
+    typeof value.invitePending !== 'boolean' ||
+    !('updatedAt' in value) ||
+    typeof value.updatedAt !== 'string'
+  ) {
+    return false
+  }
+  return true
+}
+
+function isPlayer(value: unknown): value is Player {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'id' in value &&
+    typeof value.id === 'string' &&
+    'name' in value &&
+    typeof value.name === 'string' &&
+    'initial' in value &&
+    typeof value.initial === 'string' &&
+    'color' in value &&
+    typeof value.color === 'string'
+  )
+}
+
+function projectGame(record: TicTacToeGameRecord, playerId: string): TicTacToeGame {
+  const myMark = markForPlayer(record, playerId)
+  if (!myMark) throw new Error('This player is not part of the game')
+  const opponentMark = myMark === 'X' ? 'O' : 'X'
+  const me = myMark === 'X' ? record.players.X : record.players.O
+  if (!me) throw new Error('This player is not part of the game')
+  const opponent = record.players[opponentMark]
+  const projectMark = (mark: PlayerMark | null): PlayerMark | null => {
+    if (mark === null) return null
+    return mark === myMark ? 'X' : 'O'
+  }
+  const status =
+    record.winner || record.isDraw
+      ? 'finished'
+      : !opponent
+        ? record.invitePending
+          ? 'invited'
+          : 'new'
+        : record.currentTurn === myMark
+          ? 'my-turn'
+          : 'their-turn'
+
+  return {
+    id: record.id,
+    title: record.title,
+    status,
+    board: record.board.map(projectMark),
+    me: { ...me, mark: 'X' },
+    opponent: opponent ? { ...opponent, mark: 'O' } : null,
+    winner: projectMark(record.winner),
+    isDraw: record.isDraw,
+    updatedAt: record.updatedAt
+  }
+}
+
+function markForPlayer(record: TicTacToeGameRecord, playerId: string): PlayerMark | null {
+  if (record.players.X.id === playerId) return 'X'
+  if (record.players.O?.id === playerId) return 'O'
+  return null
+}
+
+function findWinner(board: Array<PlayerMark | null>): PlayerMark | null {
+  for (const [a, b, c] of winningLines) {
+    if (board[a] && board[a] === board[b] && board[a] === board[c]) return board[a]
+  }
+  return null
+}
+
+function createPlayer(id: string, name: string, mark?: PlayerMark): Player {
+  const trimmedName = name.trim() || 'Player'
+  const initials = trimmedName
+    .split(/\s+/)
+    .map((part) => part[0])
+    .join('')
+    .slice(0, 2)
+    .toUpperCase()
+  let hash = 0
+  for (const character of id) hash = (hash * 31 + character.charCodeAt(0)) >>> 0
+  const colors = ['#7c5cff', '#ff7a90', '#35b6a4', '#f2ad50']
+  return {
+    id,
+    name: trimmedName,
+    initial: initials || 'P',
+    color: colors[hash % colors.length],
+    mark
   }
 }

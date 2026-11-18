@@ -7,6 +7,11 @@
     "test": "vitest run"
   },
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./testing": "./src/in-memory.ts"
+  },
+  "dependencies": {
+    "@hello-pear/shared-types": "0.0.1",
+    "@hello-pear/ui-notes": "0.0.1"
   }
 }
