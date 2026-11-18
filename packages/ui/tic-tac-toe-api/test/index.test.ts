@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest'
-import type { Note } from '@hello-pear/shared-types'
+import type { Note, NotesChangedEvent } from '@hello-pear/shared-types'
 import type { NotesClient } from '@hello-pear/ui-notes'
 import {
   createTicTacToeApi,
@@ -38,6 +38,13 @@ function createCatalog(playerId: string, playerName: string): GameCatalog {
 function createNotesHarness() {
   const vaults = new Map<string, Map<string, Note>>()
   const invites = new Map<string, string>()
+  const listeners = new Map<string, Set<(event: NotesChangedEvent) => void>>()
+
+  function notifyChanged(vaultId: string) {
+    for (const listener of listeners.get(vaultId) ?? []) {
+      listener({ type: 'notes:changed', vaultId })
+    }
+  }
 
   function createClient(vaultId: string): NotesClient {
     let vault = vaults.get(vaultId)
@@ -46,6 +53,7 @@ function createNotesHarness() {
       vaults.set(vaultId, vault)
     }
     const notes = vault
+    const changeListeners = new Set<(event: NotesChangedEvent) => void>()
 
     return {
       start: async () => {},
@@ -60,6 +68,7 @@ function createNotesHarness() {
           updatedAt: now
         }
         notes.set(note.id, note)
+        notifyChanged(vaultId)
         return note
       },
       getNote: async (noteId) => {
@@ -71,10 +80,12 @@ function createNotesHarness() {
         const note = await createClient(vaultId).getNote(noteId)
         const updated = { ...note, ...input, updatedAt: new Date().toISOString() }
         notes.set(noteId, updated)
+        notifyChanged(vaultId)
         return updated
       },
       deleteNote: async (noteId) => {
         if (!notes.delete(noteId)) throw new Error('Note not found')
+        notifyChanged(vaultId)
       },
       shareNote: async (noteId) => {
         const note = await createClient(vaultId).getNote(noteId)
@@ -85,7 +96,19 @@ function createNotesHarness() {
       joinVault: async (invite) => {
         if (!invites.has(invite)) throw new Error('Invalid invite')
       },
-      close: () => {}
+      onNotesChanged: (listener) => {
+        const vaultListeners = listeners.get(vaultId) ?? new Set()
+        vaultListeners.add(listener)
+        listeners.set(vaultId, vaultListeners)
+        changeListeners.add(listener)
+        return () => {
+          vaultListeners.delete(listener)
+          changeListeners.delete(listener)
+        }
+      },
+      close: () => {
+        for (const listener of changeListeners) listeners.get(vaultId)?.delete(listener)
+      }
     }
   }
 
@@ -114,8 +137,11 @@ it('stores and shares a canonical game through its own notes vault', async () =>
   const notes = createNotesHarness()
   const creatorCatalog = createCatalog('creator', 'Maya')
   const creatorApi = createTicTacToeApi(notes.createClient, creatorCatalog)
+  const changes: string[] = []
+  creatorApi.onGameChanged((gameId) => changes.push(gameId))
 
   const created = await creatorApi.create({ title: 'Sunday match' })
+  expect(changes).toContain(created.id)
   expect(creatorCatalog.get(created.id)?.noteId).toBe(created.id)
   expect(
     JSON.parse((await notes.createClient(created.id).getNote(created.id)).content)
@@ -135,6 +161,7 @@ it('stores and shares a canonical game through its own notes vault', async () =>
 
   expect(joined.me.name).toBe('Alex Morgan')
   expect(joined.status).toBe('their-turn')
+  expect(changes).toContain(created.id)
   expect((await creatorApi.list())[0].opponent?.name).toBe('Alex Morgan')
 
   const creatorMove = await creatorApi.makeMove(created.id, 0)

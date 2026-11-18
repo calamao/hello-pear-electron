@@ -123,16 +123,26 @@ export function createTicTacToeApi(
   createNotesClient: (vaultId: string) => NotesClient,
   catalog: GameCatalog
 ): TicTacToeApi {
+  const clients = new Map<string, NotesClient>()
+  const gameChangedListeners = new Set<(gameId: string) => void>()
+
+  function getClient(gameId: string) {
+    let client = clients.get(gameId)
+    if (client) return client
+
+    client = createNotesClient(gameId)
+    client.onNotesChanged(() => {
+      for (const listener of gameChangedListeners) listener(gameId)
+    })
+    clients.set(gameId, client)
+    return client
+  }
+
   async function getRecord(gameId: string) {
     const entry = catalog.get(gameId)
     if (!entry) throw new Error('Game not found')
-    const client = createNotesClient(gameId)
-    try {
-      const note = await client.getNote(entry.noteId)
-      return { entry, note, record: parseGameRecord(note, gameId) }
-    } finally {
-      client.close()
-    }
+    const note = await getClient(gameId).getNote(entry.noteId)
+    return { entry, record: parseGameRecord(note, gameId) }
   }
 
   async function saveRecord(client: NotesClient, noteId: string, record: TicTacToeGameRecord) {
@@ -146,14 +156,9 @@ export function createTicTacToeApi(
     async list() {
       const games = await Promise.all(
         catalog.list().map(async ({ gameId, noteId }) => {
-          const client = createNotesClient(gameId)
-          try {
-            const note = await client.getNote(noteId)
-            const record = parseGameRecord(note, gameId)
-            return projectGame(record, catalog.getLocalPlayer().id)
-          } finally {
-            client.close()
-          }
+          const note = await getClient(gameId).getNote(noteId)
+          const record = parseGameRecord(note, gameId)
+          return projectGame(record, catalog.getLocalPlayer().id)
         })
       )
       return games
@@ -174,25 +179,21 @@ export function createTicTacToeApi(
         invitePending: false,
         updatedAt: new Date().toISOString()
       }
-      const client = createNotesClient(gameId)
-      try {
-        const note = await client.createNote({ title, content: JSON.stringify(record) }, gameId)
-        catalog.add({ gameId, noteId: note.id })
-        return projectGame(record, player.id)
-      } finally {
-        client.close()
-      }
+      const note = await getClient(gameId).createNote(
+        { title, content: JSON.stringify(record) },
+        gameId
+      )
+      catalog.add({ gameId, noteId: note.id })
+      return projectGame(record, player.id)
     },
     async delete(gameId: string) {
       const entry = catalog.get(gameId)
       if (!entry) throw new Error('Game not found')
-      const client = createNotesClient(gameId)
-      try {
-        await client.deleteNote(entry.noteId)
-        catalog.remove(gameId)
-      } finally {
-        client.close()
-      }
+      const client = getClient(gameId)
+      await client.deleteNote(entry.noteId)
+      catalog.remove(gameId)
+      client.close()
+      clients.delete(gameId)
     },
     async makeMove(gameId: string, index: number) {
       const { entry, record } = await getRecord(gameId)
@@ -212,60 +213,51 @@ export function createTicTacToeApi(
       record.currentTurn = record.winner || record.isDraw ? null : playerMark === 'X' ? 'O' : 'X'
       record.updatedAt = new Date().toISOString()
 
-      const client = createNotesClient(gameId)
-      try {
-        await saveRecord(client, entry.noteId, record)
-      } finally {
-        client.close()
-      }
+      await saveRecord(getClient(gameId), entry.noteId, record)
       return projectGame(record, catalog.getLocalPlayer().id)
     },
     async shareGame(gameId) {
       const { entry, record } = await getRecord(gameId)
-      const client = createNotesClient(gameId)
-      try {
-        const shared = await client.shareNote(entry.noteId)
-        record.invitePending = true
-        record.updatedAt = new Date().toISOString()
-        await saveRecord(client, entry.noteId, record)
-        return {
-          version: 1,
-          gameId,
-          noteId: shared.note.id,
-          invite: shared.invite
-        }
-      } finally {
-        client.close()
+      const client = getClient(gameId)
+      const shared = await client.shareNote(entry.noteId)
+      record.invitePending = true
+      record.updatedAt = new Date().toISOString()
+      await saveRecord(client, entry.noteId, record)
+      return {
+        version: 1,
+        gameId,
+        noteId: shared.note.id,
+        invite: shared.invite
       }
     },
     async joinGame(payload, playerName) {
       if (!isTicTacToeSharePayload(payload)) throw new Error('Invalid game invite')
       if (catalog.get(payload.gameId)) throw new Error('This game is already in your catalog')
 
-      const client = createNotesClient(payload.gameId)
-      try {
-        await client.joinVault(payload.invite)
-        const note = await client.getNote(payload.noteId)
-        const record = parseGameRecord(note, payload.gameId)
-        const currentPlayer = catalog.getLocalPlayer()
+      const client = getClient(payload.gameId)
+      await client.joinVault(payload.invite)
+      const note = await client.getNote(payload.noteId)
+      const record = parseGameRecord(note, payload.gameId)
+      const currentPlayer = catalog.getLocalPlayer()
 
-        if (record.players.X.id === currentPlayer.id) {
-          throw new Error('You cannot join a game you created')
-        }
-        if (record.players.O && record.players.O.id !== currentPlayer.id) {
-          throw new Error('This game already has an opponent')
-        }
-
-        const player = catalog.setLocalPlayerName(playerName)
-        record.players.O = { ...player, mark: 'O' }
-        record.invitePending = false
-        record.updatedAt = new Date().toISOString()
-        await saveRecord(client, note.id, record)
-        catalog.add({ gameId: payload.gameId, noteId: note.id })
-        return projectGame(record, player.id)
-      } finally {
-        client.close()
+      if (record.players.X.id === currentPlayer.id) {
+        throw new Error('You cannot join a game you created')
       }
+      if (record.players.O && record.players.O.id !== currentPlayer.id) {
+        throw new Error('This game already has an opponent')
+      }
+
+      const player = catalog.setLocalPlayerName(playerName)
+      record.players.O = { ...player, mark: 'O' }
+      record.invitePending = false
+      record.updatedAt = new Date().toISOString()
+      await saveRecord(client, note.id, record)
+      catalog.add({ gameId: payload.gameId, noteId: note.id })
+      return projectGame(record, player.id)
+    },
+    onGameChanged(listener) {
+      gameChangedListeners.add(listener)
+      return () => gameChangedListeners.delete(listener)
     }
   }
 }

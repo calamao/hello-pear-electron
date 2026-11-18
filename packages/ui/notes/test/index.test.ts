@@ -1,5 +1,10 @@
 import { expect, it } from 'vitest'
-import type { NotesOperation, NotesRequest, NotesResponse } from '@hello-pear/shared-types'
+import type {
+  NotesChangedEvent,
+  NotesOperation,
+  NotesRequest,
+  NotesResponse
+} from '@hello-pear/shared-types'
 import { createNotesClient } from '../src/index'
 
 const note = {
@@ -36,8 +41,12 @@ class FakeBridge {
   writeWorkerIPC(_specifier: string, data: string) {
     const request = JSON.parse(data) as NotesRequest
     this.requests.push(request)
-    this.listener?.(new TextEncoder().encode(JSON.stringify(this.response(request))))
+    this.emit(this.response(request))
     return Promise.resolve(true)
+  }
+
+  emit(message: NotesChangedEvent | NotesResponse) {
+    this.listener?.(new TextEncoder().encode(JSON.stringify(message)))
   }
 }
 
@@ -49,10 +58,14 @@ function operationFor(request: NotesRequest): NotesOperation {
       return 'list'
     case 'notes:get':
       return 'get'
+    case 'notes:update':
+      return 'update'
     case 'notes:delete':
       return 'delete'
     case 'notes:share':
       return 'share'
+    case 'notes:join':
+      return 'join'
   }
 }
 
@@ -101,5 +114,26 @@ it('rejects a failed worker response with its API error', async () => {
   const client = createNotesClient(bridge)
 
   await expect(client.getNote('missing')).rejects.toThrow('Note not found')
+  client.close()
+})
+
+it('notifies only subscribers for the client vault', async () => {
+  const bridge = new FakeBridge()
+  bridge.response = (request) => ({
+    type: 'notes:list:result',
+    requestId: request.requestId,
+    notes: [note]
+  })
+  const client = createNotesClient(bridge, { vaultId: 'game-1' })
+  const changed: string[] = []
+  const off = client.onNotesChanged((event) => changed.push(event.vaultId))
+
+  await client.listNotes()
+  bridge.emit({ type: 'notes:changed', vaultId: 'game-1' })
+  bridge.emit({ type: 'notes:changed', vaultId: 'game-2' })
+  off()
+  bridge.emit({ type: 'notes:changed', vaultId: 'game-1' })
+
+  expect(changed).toEqual(['game-1'])
   client.close()
 })

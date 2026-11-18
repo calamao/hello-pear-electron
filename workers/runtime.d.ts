@@ -7,6 +7,8 @@ declare module 'autopass' {
   class Autopass {
     constructor(store: object)
     static pair(store: object, invite: string): AutopassPairer
+    on(event: 'update', listener: () => void): this
+    off(event: 'update', listener: () => void): this
     ready(): Promise<void>
     close(): Promise<void>
     add(key: string, value: string): Promise<void>

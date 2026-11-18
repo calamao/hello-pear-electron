@@ -27,6 +27,11 @@ export interface NotesShareResult {
   invite: string
 }
 
+export interface NotesChangedEvent {
+  type: 'notes:changed'
+  vaultId: string
+}
+
 export type NotesCommand =
   | { type: 'notes:create'; input: CreateNoteInput; noteId?: string }
   | { type: 'notes:list' }

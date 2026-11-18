@@ -128,6 +128,10 @@ function findWinner(board: Array<PlayerMark | null>): PlayerMark | null {
 
 export function createInMemoryTicTacToeApi(): TicTacToeApi {
   const games = initialGames.map(cloneGame)
+  const gameChangedListeners = new Set<(gameId: string) => void>()
+  const notifyGameChanged = (gameId: string) => {
+    for (const listener of gameChangedListeners) listener(gameId)
+  }
   let nextId = 7
 
   return {
@@ -147,15 +151,22 @@ export function createInMemoryTicTacToeApi(): TicTacToeApi {
         updatedAt: 'Just now'
       }
       games.unshift(game)
+      notifyGameChanged(game.id)
       return cloneGame(game)
     },
     async delete(gameId) {
       const index = games.findIndex((game) => game.id === gameId)
-      if (index !== -1) games.splice(index, 1)
+      if (index !== -1) {
+        games.splice(index, 1)
+        notifyGameChanged(gameId)
+      }
     },
     async shareGame(gameId) {
       const game = games.find((item) => item.id === gameId)
       if (!game) throw new Error('Game not found')
+      game.status = 'invited'
+      game.updatedAt = 'Just now'
+      notifyGameChanged(gameId)
       return {
         version: 1,
         gameId,
@@ -186,6 +197,7 @@ export function createInMemoryTicTacToeApi(): TicTacToeApi {
       game.opponent = opponent
       game.status = 'invited'
       game.updatedAt = 'Just now'
+      notifyGameChanged(game.id)
       return cloneGame(game)
     },
     async makeMove(gameId, index) {
@@ -210,7 +222,12 @@ export function createInMemoryTicTacToeApi(): TicTacToeApi {
       }
 
       game.updatedAt = 'Just now'
+      notifyGameChanged(game.id)
       return cloneGame(game)
+    },
+    onGameChanged(listener) {
+      gameChangedListeners.add(listener)
+      return () => gameChangedListeners.delete(listener)
     }
   }
 }

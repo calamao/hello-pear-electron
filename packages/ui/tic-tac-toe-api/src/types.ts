@@ -58,4 +58,5 @@ export interface TicTacToeApi {
   makeMove: (gameId: string, index: number) => Promise<TicTacToeGame>
   shareGame: (gameId: string) => Promise<TicTacToeSharePayload>
   joinGame: (payload: TicTacToeSharePayload, playerName: string) => Promise<TicTacToeGame>
+  onGameChanged: (listener: (gameId: string) => void) => () => void
 }

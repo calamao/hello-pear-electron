@@ -707,6 +707,23 @@ export default function TicTacToeApp({
 
   useEffect(() => {
     let active = true
+    let refreshTimer: ReturnType<typeof setTimeout> | null = null
+
+    const unsubscribe = gameApi.onGameChanged(() => {
+      if (refreshTimer) clearTimeout(refreshTimer)
+      refreshTimer = setTimeout(() => {
+        refreshTimer = null
+        void gameApi
+          .list()
+          .then((items) => {
+            if (active) setGames(items)
+          })
+          .catch((cause: unknown) => {
+            if (active) setError(`Could not load games: ${errorText(cause)}`)
+          })
+      }, 100)
+    })
+
     void gameApi
       .list()
       .then((items) => {
@@ -717,8 +734,17 @@ export default function TicTacToeApp({
       })
     return () => {
       active = false
+      unsubscribe()
+      if (refreshTimer) clearTimeout(refreshTimer)
     }
   }, [gameApi])
+
+  useEffect(() => {
+    setSelectedGame((current) => {
+      if (!current) return current
+      return games.find((game) => game.id === current.id) ?? current
+    })
+  }, [games])
 
   const visibleGames = games.filter((game) => {
     if (filter === 'active') return game.status !== 'finished'

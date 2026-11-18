@@ -1,6 +1,7 @@
 import type {
   CreateNoteInput,
   Note,
+  NotesChangedEvent,
   NotesCommand,
   NotesRequest,
   NotesResponse,
@@ -22,6 +23,7 @@ export interface NotesClient {
   deleteNote(noteId: string): Promise<void>
   shareNote(noteId: string): Promise<NotesShareResult>
   joinVault(invite: string): Promise<void>
+  onNotesChanged(listener: (event: NotesChangedEvent) => void): () => void
   close(): void
 }
 
@@ -45,6 +47,7 @@ export function createNotesClient(
   const vaultId = options.vaultId ?? 'notes'
   const workerSpecifier = options.workerSpecifier ?? mainWorker
   const pending = new Map<string, PendingRequest>()
+  const changeListeners = new Set<(event: NotesChangedEvent) => void>()
   const clientId = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`
   let nextRequestId = 0
   let offWorkerIPC: (() => void) | null = null
@@ -56,6 +59,13 @@ export function createNotesClient(
     try {
       parsed = JSON.parse(decoder.decode(data)) as unknown
     } catch {
+      return
+    }
+
+    if (isNotesChangedEvent(parsed)) {
+      if (parsed.vaultId === vaultId) {
+        for (const listener of changeListeners) listener(parsed)
+      }
       return
     }
 
@@ -164,17 +174,34 @@ export function createNotesClient(
       const response = await request({ type: 'notes:join', invite })
       assertResponse(response, 'notes:joined')
     },
+    onNotesChanged(listener) {
+      if (closed) throw new Error('Notes client is closed')
+      changeListeners.add(listener)
+      return () => changeListeners.delete(listener)
+    },
     close() {
       if (closed) return
       closed = true
       offWorkerIPC?.()
       offWorkerIPC = null
+      changeListeners.clear()
       for (const [requestId, request] of pending) {
         pending.delete(requestId)
         request.reject(new Error('Notes client is closed'))
       }
     }
   }
+}
+
+function isNotesChangedEvent(value: unknown): value is NotesChangedEvent {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'type' in value &&
+    value.type === 'notes:changed' &&
+    'vaultId' in value &&
+    typeof value.vaultId === 'string'
+  )
 }
 
 function isNotesResponse(value: unknown): value is NotesResponse {

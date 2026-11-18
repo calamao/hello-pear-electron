@@ -36,10 +36,13 @@ The code is small — read it for the wiring; below are only the non-obvious fac
   package's — so Node builtins it uses need an `imports` entry (see AGENTS.md
   contracts). A missing entry only fails in a packaged build.
 - Pipe protocol = UTF-8 strings in FramedStream frames: exact-match updater control
-  messages and JSON app messages (`ping`/`pong`, typed note requests/responses).
+  messages and JSON app messages (`ping`/`pong`, typed note requests/responses/events).
   Unrecognized worker inputs get an `unknown-message` reply; worker→renderer strings
   are forwarded unchanged. Shared note event contracts live in
   `packages/shared/types`.
+- Autopass `update` events are forwarded as vault-scoped `notes:changed` events.
+  Autopass does not identify the changed note, so the renderer re-reads notes in that
+  vault. `NotesClient` filters broadcasts by its configured vault ID.
 - `pear:applyUpdate` is hardwired to `'/workers/main.js'`, lazily respawns a dead
   worker, and its promise has no reject/timeout — any failure = renderer hangs.
 - `sendToAll` broadcasts every worker channel to **all** windows; nothing restarts

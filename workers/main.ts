@@ -40,6 +40,7 @@ interface NotesVault {
   store: Corestore
   pass: Autopass
   api: ReturnType<typeof createAutopassNotesApi>
+  onUpdate: () => void
 }
 
 pear.updater.on('error', (err) => pipe.write('updater-error ' + err.message))
@@ -60,6 +61,7 @@ pear.on('minver-required', () => pipe.write('minver-required'))
 goodbye(async () => {
   for (const opening of notesVaults.values()) {
     const vault = await opening
+    vault.pass.off('update', vault.onUpdate)
     await vault.pass.close()
     await vault.store.close()
   }
@@ -89,12 +91,18 @@ async function openNotesVault(vaultId: string): Promise<NotesVault> {
   const pass = new Autopass(vaultStore)
   try {
     await pass.ready()
-    return { store: vaultStore, pass, api: createAutopassNotesApi(pass) }
+    return createNotesVault(vaultId, vaultStore, pass)
   } catch (error) {
     await pass.close()
     await vaultStore.close()
     throw error
   }
+}
+
+function createNotesVault(vaultId: string, store: Corestore, pass: Autopass): NotesVault {
+  const onUpdate = () => pipe.write(JSON.stringify({ type: 'notes:changed', vaultId }))
+  pass.on('update', onUpdate)
+  return { store, pass, api: createAutopassNotesApi(pass), onUpdate }
 }
 
 async function getNotesVault(vaultId: string): Promise<NotesVault> {
@@ -125,7 +133,7 @@ async function joinNotesVault(vaultId: string, invite: string): Promise<void> {
     try {
       const pass = await pairing.finished()
       await pass.ready()
-      return { store: vaultStore, pass, api: createAutopassNotesApi(pass) }
+      return createNotesVault(vaultId, vaultStore, pass)
     } catch (error) {
       await pairing.close()
       await vaultStore.close()
