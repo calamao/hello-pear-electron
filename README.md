@@ -466,6 +466,18 @@ Outputs the static renderer app to `renderer-dist/`.
 
 ---
 
+### `npm test` <a name="script-test"></a>
+
+Run the Vitest suites for all UI and worker workspace packages.
+
+```sh
+npm test
+```
+
+For example, test one package with `npm test --workspace=@hello-pear/ui-hello-pear`.
+
+---
+
 ### `npm run lint` <a name="script-lint"></a>
 
 Check formatting and linting.
