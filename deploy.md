@@ -1,6 +1,6 @@
 Executed all these commands successfuly, not sure if it was enough
 
-```terminal
+```sh
 pear seed pear://x7cu7u88j6riqkr1in6fcwubo5bx6dztg65sebmzhje4h98x3dqy
 
 
@@ -15,8 +15,8 @@ pear build \
   --linux-x64-app ./hello-pear-electron/out/make/HelloPear-Electron.AppImage
   
 
-  pear stage --dry-run pear://x7cu7u88j6riqkr1in6fcwubo5bx6dztg65sebmzhje4h98x3dqy ./hello-jorge-pear-electron-1.0.0
-  
-  pear stage pear://x7cu7u88j6riqkr1in6fcwubo5bx6dztg65sebmzhje4h98x3dqy ./hello-jorge-pear-electron-1.0.0
+pear stage --dry-run pear://x7cu7u88j6riqkr1in6fcwubo5bx6dztg65sebmzhje4h98x3dqy ./hello-jorge-pear-electron-1.0.0
+
+pear stage pear://x7cu7u88j6riqkr1in6fcwubo5bx6dztg65sebmzhje4h98x3dqy ./hello-jorge-pear-electron-1.0.0
 
 ```
