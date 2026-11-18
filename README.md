@@ -6,6 +6,8 @@ A Tic Tac Toe multiplayer game app built on top of the Autopass API.
 
 <video src="https://github.com/user-attachments/assets/5a715c66-481c-4914-b820-da69dc0aa75f" controls width="100%"></video>
 
+<a href="https://github.com/user-attachments/assets/5a715c66-481c-4914-b820-da69dc0aa75f" target="_blank" rel="noopener noreferrer">Open the uploaded video in a new tab</a>
+
 [Download the compressed demo video](./assets/tic-tac-toe-demo.mp4).
 
 ## Screenshots
